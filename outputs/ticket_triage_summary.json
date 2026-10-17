@@ -1,0 +1,10 @@
+{
+  "tickets_processed": 164,
+  "llm_calls_used": 184,
+  "llm_call_budget": 500,
+  "valid_classifications": 143,
+  "fallback_classifications": 21,
+  "retry_attempts": 20,
+  "accuracy_on_valid_classifications": 0.8489,
+  "evaluated_tickets": 139
+}
