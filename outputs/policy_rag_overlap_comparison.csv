@@ -1,0 +1,7 @@
+strategy,top_k,chunk_count,retrieved_chunk_count,completed_order_condition_found,45_minute_condition_found,7_day_condition_found,all_conditions_retrieved
+overlap_10,3,15,3,True,True,False,False
+overlap_10,5,15,5,True,True,True,True
+overlap_10,8,15,6,True,True,True,True
+no_overlap,3,13,3,True,True,True,True
+no_overlap,5,13,5,True,True,True,True
+no_overlap,8,13,5,True,True,True,True

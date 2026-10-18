@@ -1,8 +1,9 @@
 
 import json
+import random
 import re
-import time
 import sys
+import time
 from pathlib import Path
 
 import pandas as pd
@@ -10,180 +11,541 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import mock_llm
+import mock_llm  # Do not modify mock_llm.py
 
 
-
-ROOT = Path(__file__).resolve().parents[1]
 CLEAN_DIR = ROOT / "data" / "clean"
 OUTPUT_DIR = ROOT / "outputs"
 
 ALLOWED_CATEGORIES = {"billing", "delivery", "technical", "fraud"}
 
-# Safety and reliability settings
-MAX_ATTEMPTS = 3
-MAX_LLM_CALLS = 500
-RETRY_DELAY_SECONDS = 0.1
+MAX_RETRIES = 3
+BASE_DELAY = 0.05
+LONG_TICKET_TOKEN_LIMIT = 400
 
+
+ZERO_SHOT_PROMPT = """
+CLASSIFY each customer support ticket into exactly one category:
+billing, delivery, technical, or fraud.
+
+Return JSON only:
+{"category": "...", "reason": "..."}
+
+Use only the allowed categories.
+Do not include markdown or text outside the JSON.
+""".strip()
+
+
+FEW_SHOT_PROMPT = """
+CLASSIFY each customer support ticket into exactly one category:
+billing, delivery, technical, or fraud.
+
+Return JSON only:
+{"category": "...", "reason": "..."}
+
+Use only the allowed categories.
+Do not include markdown or text outside the JSON.
+
+EXAMPLES:
+
+Ticket: I was charged twice for my order.
+Output: {"category": "billing", "reason": "Duplicate charge"}
+
+Ticket: My order has not arrived.
+Output: {"category": "delivery", "reason": "Delivery delay"}
+
+Ticket: The app crashes when I open it.
+Output: {"category": "technical", "reason": "App crash"}
+
+Ticket: Someone accessed my account without permission.
+Output: {"category": "fraud", "reason": "Possible unauthorized access"}
+""".strip()
+
+
+# --------------------------------------------------
+# 1. PII REDACTION
+# --------------------------------------------------
 
 def redact_pii(text):
-    """Mask email addresses and phone-like numbers."""
+    """Redact email, phone and order ID in the required order."""
     if pd.isna(text):
         return ""
 
     text = str(text)
 
     text = re.sub(
-        r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
-        "[EMAIL_REDACTED]",
+        r"[\w.+-]+@[\w-]+\.[\w.]+",
+        "[EMAIL]",
         text,
     )
 
-    def mask_phone(match):
-        value = match.group()
-        digit_count = sum(char.isdigit() for char in value)
-
-        if digit_count >= 10:
-            return "[PHONE_REDACTED]"
-
-        return value
+    text = re.sub(
+        r"\b[6-9]\d{9}\b",
+        "[PHONE]",
+        text,
+    )
 
     text = re.sub(
-        r"(?<!\w)(?:\+?\d[\d\s().-]{8,}\d)(?!\w)",
-        mask_phone,
+        r"ORD-\d{6}",
+        "[ORDER_ID]",
         text,
     )
 
     return text
 
 
-def build_system_prompt():
-    """Tell the mock LLM to classify tickets using allowed categories."""
-    return (
-        "CLASSIFY support tickets. "
-        "Return ONLY a JSON object with keys category and reason. "
-        "category must be exactly one of: billing, delivery, technical, fraud. "
-        "Do not include personal information in the response."
-    )
+def count_pii(text):
+    """Count remaining occurrences of the required PII patterns."""
+    text = "" if pd.isna(text) else str(text)
+
+    return {
+        "emails": len(
+            re.findall(r"[\w.+-]+@[\w-]+\.[\w.]+", text)
+        ),
+        "phones": len(
+            re.findall(r"\b[6-9]\d{9}\b", text)
+        ),
+        "order_ids": len(
+            re.findall(r"ORD-\d{6}", text)
+        ),
+    }
 
 
-def classify_ticket(redacted_text, budget):
-    """
-    Classify one redacted ticket.
-    Retries temporary failures, validates JSON and category,
-    and falls back safely when classification fails.
-    """
-    if budget["calls"] >= MAX_LLM_CALLS:
-        return "technical", "call_budget_exhausted", 0, False
-
-    attempts = 0
-
-    while attempts < MAX_ATTEMPTS:
-        if budget["calls"] >= MAX_LLM_CALLS:
-            return "technical", "call_budget_exhausted", attempts, False
-
-        attempts += 1
-        budget["calls"] += 1
-
-        messages = [
-            {"role": "system", "content": build_system_prompt()},
-            {"role": "user", "content": redacted_text},
-        ]
-
-        try:
-            response = mock_llm.chat(messages)
-            content = response.choices[0].message.content
-
-            result = json.loads(content)
-
-            category = result.get("category")
-            reason = result.get("reason", "not_provided")
-
-            if category not in ALLOWED_CATEGORIES:
-                return "technical", "invalid_category_fallback", attempts, False
-
-            return category, str(reason), attempts, True
-
-        except mock_llm.TransientLLMError:
-            if attempts < MAX_ATTEMPTS:
-                time.sleep(RETRY_DELAY_SECONDS)
-
-        except (json.JSONDecodeError, TypeError, AttributeError, ValueError):
-            return "technical", "invalid_response_fallback", attempts, False
-
-        except Exception:
-            return "technical", "unexpected_error_fallback", attempts, False
-
-    return "technical", "retry_limit_fallback", attempts, False
-
+# --------------------------------------------------
+# 2. CUSTOMER SEGMENTS
+# --------------------------------------------------
 
 def load_customer_segments():
-    """Load segment information produced by Part B."""
     path = OUTPUT_DIR / "customer_segments.csv"
 
     if not path.exists():
         raise FileNotFoundError(
-            f"Missing {path}. Run customer_segmentation.py first."
+            f"Missing {path}. Generate customer_segments.csv first."
         )
 
-    segments = pd.read_csv(path)
+    df = pd.read_csv(path)
 
-    required = {"customer_id", "segment_name", "is_premium"}
-    missing = required - set(segments.columns)
+    if "customer_id" not in df.columns:
+        raise ValueError(
+            "customer_segments.csv must contain customer_id."
+        )
 
-    if missing:
-        raise ValueError(f"Missing columns in customer_segments.csv: {missing}")
+    segment_col = next(
+        (
+            col
+            for col in ("segment_name", "segment", "cluster_name")
+            if col in df.columns
+        ),
+        None,
+    )
 
-    segments["customer_id"] = segments["customer_id"].astype(str)
+    if segment_col is None:
+        raise ValueError(
+            "customer_segments.csv must contain segment_name."
+        )
 
-    return segments[["customer_id", "segment_name", "is_premium"]]
+    if "is_premium" not in df.columns:
+        raise ValueError(
+            "customer_segments.csv must contain is_premium."
+        )
 
+    segments = {}
 
-def route_ticket(category, segment_name, is_premium):
-    """Apply deterministic routing rules after classification."""
-    segment = str(segment_name).strip().lower()
+    for _, row in df.iterrows():
+        customer_id = str(row["customer_id"]).strip()
+        premium_value = str(row["is_premium"]).strip().lower()
 
-    if category == "fraud":
-        return "urgent_fraud_review"
-
-    if category == "technical":
-        return "technical_support"
-
-    if category == "billing":
-        return "billing_support"
-
-    if category == "delivery":
-        if bool(is_premium) or segment == "top value":
-            return "priority_delivery_support"
-
-        if segment == "no completed orders":
-            return "new_customer_support"
-
-        return "standard_delivery_support"
-
-    return "human_review"
-
-
-def calculate_metrics(results):
-    """Calculate classification metrics when ground-truth labels exist."""
-    valid = results[
-        results["classification_valid"]
-        & results["true_category"].isin(ALLOWED_CATEGORIES)
-    ]
-
-    if valid.empty:
-        return {
-            "evaluated_tickets": 0,
-            "accuracy": None,
+        segments[customer_id] = {
+            "segment_name": (
+                str(row[segment_col])
+                if pd.notna(row[segment_col])
+                else "Unknown"
+            ),
+            "is_premium": premium_value in {
+                "true", "1", "yes"
+            },
         }
 
-    accuracy = (valid["predicted_category"] == valid["true_category"]).mean()
+    return segments
 
-    return {
-        "evaluated_tickets": int(len(valid)),
-        "accuracy": round(float(accuracy), 4),
+
+# --------------------------------------------------
+# 3. MODEL RESPONSE PARSING
+# --------------------------------------------------
+
+def parse_model_output(raw_text):
+    """
+    Valid allowed-category JSON -> classified_json.
+    Invalid JSON with exactly one allowed category keyword
+    -> classified_keyword.
+    All other responses -> flagged_invalid_output.
+    """
+
+    try:
+        payload = json.loads(raw_text)
+
+        if isinstance(payload, dict):
+            category = str(
+                payload.get("category", "")
+            ).strip().lower()
+
+            reason = str(
+                payload.get("reason", "")
+            ).strip()
+
+            if category in ALLOWED_CATEGORIES:
+                return category, reason, "classified_json"
+
+    except (json.JSONDecodeError, TypeError, ValueError):
+        pass
+
+    words = re.findall(r"[a-z]+", str(raw_text).lower())
+
+    category_words = [
+        word for word in words
+        if word in ALLOWED_CATEGORIES
+    ]
+
+    unique_categories = set(category_words)
+
+    if len(unique_categories) == 1:
+        category = next(iter(unique_categories))
+
+        return (
+            category,
+            "Recovered from category keyword",
+            "classified_keyword",
+        )
+
+    return "", "", "flagged_invalid_output"
+
+
+# --------------------------------------------------
+# 4. MODEL CALL WITH RETRIES
+# --------------------------------------------------
+
+def call_model_with_retry(system_prompt, user_text, ticket_id):
+    """
+    Call mock_llm.chat().
+    Retry transient failures up to three times.
+    Return response text and reported token usage.
+    """
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_text},
+    ]
+
+    for retry_number in range(MAX_RETRIES + 1):
+        try:
+            response = mock_llm.chat(messages)
+
+            # mock_llm returns a response object.
+            raw_text = (
+                response.choices[0].message.content or ""
+            )
+
+            token_count = int(response.usage.total_tokens)
+
+            return raw_text, token_count
+
+        except mock_llm.TransientLLMError:
+            if retry_number >= MAX_RETRIES:
+                raise
+
+            wait_seconds = (
+                BASE_DELAY
+                * (2 ** retry_number)
+                * random.uniform(0.9, 1.15)
+            )
+
+            print(
+                f"Retry: ticket_id={ticket_id}, "
+                f"retry_number={retry_number}, "
+                f"wait_seconds={wait_seconds:.4f}"
+            )
+
+            time.sleep(wait_seconds)
+
+    raise RuntimeError("Unexpected retry-loop exit")
+
+
+# --------------------------------------------------
+# 5. ROUTING
+# --------------------------------------------------
+
+def route_ticket(status, category, is_premium):
+    """Choose destination and priority using capstone rules."""
+
+    human_review_statuses = {
+        "skipped_empty",
+        "flagged_long",
+        "flagged_invalid_output",
+        "budget_exhausted",
     }
 
+    if status in human_review_statuses:
+        return "human_review", "NORMAL"
+
+    if category == "fraud":
+        return "security_team", "HIGH"
+
+    if is_premium:
+        return "premium_desk", "HIGH"
+
+    return "support_queue", "NORMAL"
+
+
+# --------------------------------------------------
+# 6. METRICS
+# --------------------------------------------------
+
+def calculate_accuracy(results):
+    if "true_category" not in results.columns:
+        return None
+
+    evaluated = results[
+        results["true_category"].notna()
+        & results["category"].isin(ALLOWED_CATEGORIES)
+    ].copy()
+
+    if evaluated.empty:
+        return None
+
+    actual = (
+        evaluated["true_category"]
+        .astype(str)
+        .str.strip()
+        .str.lower()
+    )
+
+    predicted = (
+        evaluated["category"]
+        .astype(str)
+        .str.strip()
+        .str.lower()
+    )
+
+    return float((actual == predicted).mean())
+
+
+def make_confusion_matrix(results):
+    if "true_category" not in results.columns:
+        return {}
+
+    evaluated = results[
+        results["true_category"].notna()
+        & results["category"].isin(ALLOWED_CATEGORIES)
+    ].copy()
+
+    if evaluated.empty:
+        return {}
+
+    evaluated["actual"] = (
+        evaluated["true_category"]
+        .astype(str)
+        .str.strip()
+        .str.lower()
+    )
+
+    evaluated["predicted"] = (
+        evaluated["category"]
+        .astype(str)
+        .str.strip()
+        .str.lower()
+    )
+
+    evaluated = evaluated[
+        evaluated["actual"].isin(ALLOWED_CATEGORIES)
+    ]
+
+    if evaluated.empty:
+        return {}
+
+    labels = sorted(ALLOWED_CATEGORIES)
+
+    matrix = pd.crosstab(
+        evaluated["actual"],
+        evaluated["predicted"],
+    ).reindex(
+        index=labels,
+        columns=labels,
+        fill_value=0,
+    )
+
+    return {
+        "labels": labels,
+        "matrix": matrix.values.tolist(),
+    }
+
+
+# --------------------------------------------------
+# 7. TRIAGE ONE BATCH
+# --------------------------------------------------
+
+def run_triage(
+    tickets,
+    segments,
+    system_prompt,
+    run_name,
+    token_budget=None,
+):
+    results = []
+    total_tokens = 0
+    successful_model_calls = 0
+
+    for _, ticket in tickets.iterrows():
+        ticket_id = ticket.get("ticket_id", "")
+        customer_id = ticket.get("customer_id", "")
+        original_text = ticket.get("text", "")
+
+        # Redact before any model call.
+        redacted_text = redact_pii(original_text)
+        pii_remaining = count_pii(redacted_text)
+
+        segment_info = segments.get(
+            str(customer_id).strip(),
+            {
+                "segment_name": "Unknown",
+                "is_premium": False,
+            },
+        )
+
+        segment_name = segment_info["segment_name"]
+        is_premium = segment_info["is_premium"]
+
+        category = ""
+        reason = ""
+        status = ""
+        tokens_used = 0
+
+        # Guardrail 1: empty or whitespace-only ticket.
+        if not redacted_text.strip():
+            status = "skipped_empty"
+
+        else:
+            estimated_ticket_tokens = mock_llm.est_tokens(
+                redacted_text
+            )
+
+            # Guardrail 2: long ticket.
+            if estimated_ticket_tokens > LONG_TICKET_TOKEN_LIMIT:
+                status = "flagged_long"
+
+            else:
+                # Estimate tokens before calling the model.
+                estimated_call_tokens = (
+                    mock_llm.est_tokens(system_prompt)
+                    + estimated_ticket_tokens
+                )
+
+                # Guardrail 3: don't begin a call if the
+                # estimated prompt itself reaches the budget.
+                if (
+                    token_budget is not None
+                    and total_tokens + estimated_call_tokens
+                    >= token_budget
+                ):
+                    status = "budget_exhausted"
+
+                else:
+                    try:
+                        raw_output, tokens_used = (
+                            call_model_with_retry(
+                                system_prompt=system_prompt,
+                                user_text=redacted_text,
+                                ticket_id=ticket_id,
+                            )
+                        )
+
+                        successful_model_calls += 1
+                        total_tokens += tokens_used
+
+                        category, reason, status = (
+                            parse_model_output(raw_output)
+                        )
+
+                    except mock_llm.TransientLLMError:
+                        status = "flagged_invalid_output"
+                        reason = (
+                            "Transient model failure after retries"
+                        )
+
+        route, priority = route_ticket(
+            status,
+            category,
+            is_premium,
+        )
+
+        result = {
+            "ticket_id": ticket_id,
+            "customer_id": customer_id,
+            "status": status,
+            "category": category,
+            "reason": reason,
+            "segment_name": segment_name,
+            "priority": priority,
+            "route": route,
+            "tokens_used": tokens_used,
+            "emails_remaining": pii_remaining["emails"],
+            "phones_remaining": pii_remaining["phones"],
+            "order_ids_remaining": pii_remaining["order_ids"],
+            "redacted_text": redacted_text,
+        }
+
+        if "true_category" in tickets.columns:
+            result["true_category"] = ticket.get(
+                "true_category", ""
+            )
+
+        results.append(result)
+
+    output = pd.DataFrame(results)
+
+    classified_json = int(
+        (output["status"] == "classified_json").sum()
+    )
+
+    classified_keyword = int(
+        (output["status"] == "classified_keyword").sum()
+    )
+
+    classified_total = classified_json + classified_keyword
+
+    summary = {
+        "run_name": run_name,
+        "tickets_total": len(tickets),
+        "model_calls": successful_model_calls,
+        "tokens_used_total": total_tokens,
+        "classified_json": classified_json,
+        "classified_keyword": classified_keyword,
+        "classified_total": classified_total,
+        "flagged_invalid_output": int(
+            (output["status"] == "flagged_invalid_output").sum()
+        ),
+        "skipped_empty": int(
+            (output["status"] == "skipped_empty").sum()
+        ),
+        "flagged_long": int(
+            (output["status"] == "flagged_long").sum()
+        ),
+        "budget_exhausted": int(
+            (output["status"] == "budget_exhausted").sum()
+        ),
+        "accuracy": calculate_accuracy(output),
+        "tokens_per_classified": (
+            total_tokens / classified_total
+            if classified_total
+            else None
+        ),
+    }
+
+    return output, summary
+
+
+# --------------------------------------------------
+# 8. MAIN PROGRAM
+# --------------------------------------------------
 
 def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -192,113 +554,201 @@ def main():
 
     if not tickets_path.exists():
         raise FileNotFoundError(
-            f"Missing {tickets_path}. Run clean_data.py first."
+            f"Missing {tickets_path}. "
+            "Run the data preparation scripts first."
         )
 
     tickets = pd.read_csv(tickets_path)
 
-    required = {"ticket_id", "customer_id", "order_id", "text", "true_category"}
-    missing = required - set(tickets.columns)
+    required_columns = {
+        "ticket_id",
+        "customer_id",
+        "text",
+    }
 
-    if missing:
-        raise ValueError(f"Missing columns in tickets.csv: {missing}")
+    missing_columns = required_columns - set(tickets.columns)
 
-    # Reset deterministic mock behaviour for a reproducible run.
-    mock_llm.reset()
-
-    tickets["customer_id"] = tickets["customer_id"].astype(str)
-    tickets["redacted_text"] = tickets["text"].apply(redact_pii)
+    if missing_columns:
+        raise ValueError(
+            f"tickets.csv is missing columns: "
+            f"{sorted(missing_columns)}"
+        )
 
     segments = load_customer_segments()
 
-    tickets = tickets.merge(
-        segments,
-        on="customer_id",
-        how="left",
-        validate="many_to_one",
-    )
-
-    tickets["segment_name"] = tickets["segment_name"].fillna("Unknown")
-    tickets["is_premium"] = tickets["is_premium"].fillna(False).astype(bool)
-
-    budget = {"calls": 0}
-    records = []
-
-    for _, row in tickets.iterrows():
-        category, reason, attempts, valid = classify_ticket(
-            row["redacted_text"], budget
-        )
-
-        route = route_ticket(
-            category,
-            row["segment_name"],
-            row["is_premium"],
-        )
-
-        records.append(
-            {
-                "ticket_id": row["ticket_id"],
-                "customer_id": row["customer_id"],
-                "order_id": row["order_id"],
-                "redacted_text": row["redacted_text"],
-                "true_category": row["true_category"],
-                "predicted_category": category,
-                "classification_reason": reason,
-                "classification_valid": valid,
-                "attempts": attempts,
-                "segment_name": row["segment_name"],
-                "is_premium": row["is_premium"],
-                "route": route,
-            }
-        )
-
-    results = pd.DataFrame(records)
-
-    # Save redacted input separately from classification results.
-    results[
-        [
-            "ticket_id",
-            "customer_id",
-            "order_id",
-            "redacted_text",
-            "true_category",
-        ]
-    ].to_csv(OUTPUT_DIR / "tickets_redacted.csv", index=False)
-
-    results.to_csv(OUTPUT_DIR / "ticket_triage_results.csv", index=False)
-
-    # Small summary report.
-    metrics = calculate_metrics(results)
-
-    summary = {
-        "tickets_processed": int(len(results)),
-        "llm_calls_used": int(budget["calls"]),
-        "llm_call_budget": MAX_LLM_CALLS,
-        "valid_classifications": int(results["classification_valid"].sum()),
-        "fallback_classifications": int((~results["classification_valid"]).sum()),
-        "retry_attempts": int((results["attempts"] > 1).sum()),
-        "accuracy_on_valid_classifications": metrics["accuracy"],
-        "evaluated_tickets": metrics["evaluated_tickets"],
+    # Audit the raw PII counts and confirm that redaction removes them.
+    pii_before = {
+        "emails": 0,
+        "phones": 0,
+        "order_ids": 0,
     }
 
-    with open(OUTPUT_DIR / "ticket_triage_summary.json", "w", encoding="utf-8") as file:
+    pii_after = {
+        "emails": 0,
+        "phones": 0,
+        "order_ids": 0,
+    }
+
+    for original_text in tickets["text"].fillna("").astype(str):
+        before = count_pii(original_text)
+        after = count_pii(redact_pii(original_text))
+
+        for key in pii_before:
+            pii_before[key] += before[key]
+            pii_after[key] += after[key]
+
+    pii_audit = {
+        "before_redaction": pii_before,
+        "after_redaction": pii_after,
+        "total_substitutions": sum(pii_before.values()),
+    }
+
+    # Run 1: zero-shot without budget.
+    mock_llm.reset()
+
+    zero_results, zero_summary = run_triage(
+        tickets,
+        segments,
+        ZERO_SHOT_PROMPT,
+        "zero_shot",
+    )
+
+    zero_results.to_csv(
+        OUTPUT_DIR / "triage_zero_shot.csv",
+        index=False,
+    )
+
+    confusion = make_confusion_matrix(zero_results)
+
+    if confusion:
+        confusion_df = pd.DataFrame(
+            confusion["matrix"],
+            index=confusion["labels"],
+            columns=confusion["labels"],
+        )
+
+        confusion_df.index.name = "actual"
+
+        confusion_df.to_csv(
+            OUTPUT_DIR / "triage_confusion_zero_shot.csv"
+        )
+
+    # Run 2: few-shot without budget.
+    mock_llm.reset()
+
+    few_results, few_summary = run_triage(
+        tickets,
+        segments,
+        FEW_SHOT_PROMPT,
+        "few_shot",
+    )
+
+    few_results.to_csv(
+        OUTPUT_DIR / "triage_few_shot.csv",
+        index=False,
+    )
+
+    # Run 3: budget demo; try 6000, then 5000 if needed.
+    budget = 6000
+
+    mock_llm.reset()
+
+    budget_results, budget_summary = run_triage(
+        tickets,
+        segments,
+        ZERO_SHOT_PROMPT,
+        "budget_demo",
+        token_budget=budget,
+    )
+
+    if not (
+        budget_results["status"] == "budget_exhausted"
+    ).any():
+        budget = 5000
+
+        mock_llm.reset()
+
+        budget_results, budget_summary = run_triage(
+            tickets,
+            segments,
+            ZERO_SHOT_PROMPT,
+            "budget_demo",
+            token_budget=budget,
+        )
+
+    budget_results.to_csv(
+        OUTPUT_DIR / "triage_budget_demo.csv",
+        index=False,
+    )
+
+    # Run 4: final few-shot run with a large budget.
+    mock_llm.reset()
+
+    final_results, final_summary = run_triage(
+        tickets,
+        segments,
+        FEW_SHOT_PROMPT,
+        "final_few_shot",
+        token_budget=100000,
+    )
+
+    final_columns = [
+        "ticket_id",
+        "customer_id",
+        "status",
+        "category",
+        "segment_name",
+        "priority",
+        "route",
+        "tokens_used",
+    ]
+
+    final_results[final_columns].to_csv(
+        OUTPUT_DIR / "triage_results.csv",
+        index=False,
+    )
+
+    final_results[
+        [
+            "ticket_id",
+            "redacted_text",
+            "emails_remaining",
+            "phones_remaining",
+            "order_ids_remaining",
+        ]
+    ].to_csv(
+        OUTPUT_DIR / "tickets_redacted.csv",
+        index=False,
+    )
+
+    summary = {
+        "pii_audit": pii_audit,
+        "zero_shot": zero_summary,
+        "zero_shot_confusion_matrix": confusion,
+        "few_shot": few_summary,
+        "budget_demo": budget_summary,
+        "final_few_shot": final_summary,
+        "budget_used": budget,
+    }
+
+    with open(
+        OUTPUT_DIR / "ticket_triage_summary.json",
+        "w",
+        encoding="utf-8",
+    ) as file:
         json.dump(summary, file, indent=2)
 
-    print("Ticket triage completed.")
-    print(f"Tickets processed: {len(results)}")
-    print(f"LLM calls used: {budget['calls']} / {MAX_LLM_CALLS}")
-    print(f"Valid classifications: {summary['valid_classifications']}")
-    print(f"Fallback classifications: {summary['fallback_classifications']}")
-    print(f"Tickets retried: {summary['retry_attempts']}")
-    print(f"Accuracy on valid classifications: {metrics['accuracy']}")
-    print(f"Results saved: {OUTPUT_DIR / 'ticket_triage_results.csv'}")
-    print(f"Summary saved: {OUTPUT_DIR / 'ticket_triage_summary.json'}")
+    print("\n=== PII Audit ===")
+    print(json.dumps(pii_audit, indent=2))
 
-    print("\nCategory counts:")
-    print(results["predicted_category"].value_counts())
+    print("\n=== Ticket Triage Summary ===")
+    print(json.dumps(summary, indent=2))
 
-    print("\nRouting counts:")
-    print(results["route"].value_counts())
+    print("\nSaved outputs:")
+    print(OUTPUT_DIR / "triage_results.csv")
+    print(OUTPUT_DIR / "triage_budget_demo.csv")
+    print(OUTPUT_DIR / "triage_confusion_zero_shot.csv")
+    print(OUTPUT_DIR / "ticket_triage_summary.json")
 
 
 if __name__ == "__main__":

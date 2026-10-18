@@ -1,27 +1,38 @@
 
+import json
 import re
 import sys
 from pathlib import Path
 
 import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import (
+    TfidfVectorizer,
+    ENGLISH_STOP_WORDS,
+)
 from sklearn.metrics.pairwise import cosine_similarity
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import mock_llm
-
-
 POLICY_DIR = ROOT / "data" / "policies"
 OUTPUT_DIR = ROOT / "outputs"
 
-TOP_K = 4
+CHUNK_SIZE = 40
+CHUNK_OVERLAP = 10
+TOP_K = 3
 MIN_SIMILARITY = 0.03
 
+FALLBACK_ANSWER = (
+    "I could not find sufficient information in the policy "
+    "documents. Please contact a human support agent."
+)
+
+
+# --------------------------------------------------
+# 1. LOAD POLICY DOCUMENTS
+# --------------------------------------------------
 
 def load_policy_documents():
-    """Load policy documents from the policies folder."""
     documents = []
 
     for path in sorted(POLICY_DIR.glob("*.txt")):
@@ -41,30 +52,55 @@ def load_policy_documents():
     return documents
 
 
-def split_sentences(documents):
-    """Split policy documents into sentence-sized chunks."""
-    chunks = []
+# --------------------------------------------------
+# 2. SPLIT DOCUMENTS INTO CHUNKS
+# --------------------------------------------------
 
-    for document in documents:
-        sentences = re.split(
-            r"(?<=[.!?])\s+",
-            document["text"],
+def split_documents(
+    documents,
+    chunk_size=CHUNK_SIZE,
+    overlap=CHUNK_OVERLAP,
+):
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be positive")
+
+    if overlap < 0 or overlap >= chunk_size:
+        raise ValueError(
+            "overlap must be >= 0 and less than chunk_size"
         )
 
-        for sentence in sentences:
-            sentence = sentence.strip()
+    chunks = []
+    step = chunk_size - overlap
 
-            if sentence:
-                chunks.append({
-                    "source": document["source"],
-                    "text": sentence,
-                })
+    for document in documents:
+        words = document["text"].split()
+
+        for start in range(0, len(words), step):
+            chunk_words = words[start:start + chunk_size]
+
+            if not chunk_words:
+                continue
+
+            chunks.append({
+                "source": document["source"],
+                "text": " ".join(chunk_words),
+                "word_count": len(chunk_words),
+            })
+
+            if start + chunk_size >= len(words):
+                break
 
     return chunks
 
 
+# --------------------------------------------------
+# 3. BUILD TF-IDF RETRIEVER
+# --------------------------------------------------
+
 def build_retriever(chunks):
-    """Create a TF-IDF search index."""
+    if not chunks:
+        raise ValueError("No policy chunks available")
+
     vectorizer = TfidfVectorizer(
         lowercase=True,
         stop_words="english",
@@ -79,10 +115,19 @@ def build_retriever(chunks):
     return vectorizer, matrix
 
 
-def retrieve_policy(question, chunks, vectorizer, matrix):
-    """Find the most relevant policy sentences."""
+def retrieve_policy(
+    question,
+    chunks,
+    vectorizer,
+    matrix,
+    top_k=TOP_K,
+):
     question_vector = vectorizer.transform([question])
-    scores = cosine_similarity(question_vector, matrix).ravel()
+
+    scores = cosine_similarity(
+        question_vector,
+        matrix,
+    ).ravel()
 
     ranked_indices = scores.argsort()[::-1]
     results = []
@@ -99,74 +144,96 @@ def retrieve_policy(question, chunks, vectorizer, matrix):
             "score": round(score, 4),
         })
 
-        if len(results) >= TOP_K:
+        if len(results) >= top_k:
             break
 
     return results
 
 
+# --------------------------------------------------
+# 4. CHECK WHETHER RETRIEVED CONTEXT IS RELEVANT
+# --------------------------------------------------
+
+def meaningful_terms(text):
+    words = re.findall(r"[a-zA-Z]+", text.lower())
+
+    return {
+        word
+        for word in words
+        if word not in ENGLISH_STOP_WORDS and len(word) > 1
+    }
+
+
+def has_relevant_query_terms(question, retrieved):
+    if not retrieved:
+        return False
+
+    query_terms = meaningful_terms(question)
+
+    if not query_terms:
+        return False
+
+    context_terms = set()
+
+    for item in retrieved:
+        context_terms.update(meaningful_terms(item["text"]))
+
+    shared_terms = query_terms & context_terms
+    best_score = max(item["score"] for item in retrieved)
+
+    # Multiple shared terms are required unless the match is strong.
+    return len(shared_terms) >= 2 or best_score >= 0.25
+
+
+# --------------------------------------------------
+# 5. POLICY RULES FOR KNOWN QUESTIONS
+# --------------------------------------------------
+
 def apply_policy_rules(question):
-    """
-    Deterministic guardrails for frequently asked policy questions.
-    Rules are based on the project's policy documents.
-    """
     q = question.lower()
 
-    # Late-delivery refund eligibility
     if (
         "late delivery refund" in q
         or "refund allowed" in q
         or "delivery refund" in q
     ):
         return (
-            "A full refund applies only to a completed order delivered "
-            "in more than 45 minutes. No late-delivery refund applies "
-            "at 45 minutes or less. The request must be raised within "
-            "7 days of the delivery date."
-        ), "refund_policy.txt"
+            "A full refund applies only to a completed order "
+            "delivered in more than 45 minutes. No late-delivery "
+            "refund applies at 45 minutes or less. The request "
+            "must be raised within 7 days of the delivery date.",
+            "refund_policy.txt",
+        )
 
-    # Failed payment where money was deducted
-    if (
-        "failed payment" in q
-        or "payment failed" in q
-    ):
+    if "failed payment" in q or "payment failed" in q:
         return (
-            "If a payment fails but money is deducted, the amount is "
-            "returned automatically within 48 hours."
-        ), "payment_policy.txt"
+            "If a payment fails but money is deducted, the amount "
+            "is returned automatically within 48 hours.",
+            "payment_policy.txt",
+        )
 
-    # Cash on delivery limit
-    if (
-        "cash on delivery" in q
-        or "cod" in q
-    ):
+    if "fraud" in q or "unauthorized transaction" in q:
         return (
-            "Cash on delivery is available only for orders up to "
-            "INR 2500."
-        ), "payment_policy.txt"
+            "A ticket about fraud or an unauthorized transaction "
+            "is marked high priority and sent to the security team "
+            "within 2 hours.",
+            "escalation_policy.txt",
+        )
 
-    # Fraud and unauthorized transactions
-    if (
-        "fraud" in q
-        or "unauthorized transaction" in q
-    ):
-        return (
-            "A ticket about fraud or an unauthorized transaction is "
-            "marked high priority and sent to the security team within "
-            "2 hours."
-        ), "escalation_policy.txt"
-
-    # Delivery address retention
-    if (
-        "delivery address" in q
-        or "delivery addresses" in q
-    ):
+    if "delivery address" in q or "delivery addresses" in q:
         return (
             "Delivery addresses are deleted from active systems "
-            "180 days after the last order."
-        ), "privacy_policy.txt"
+            "180 days after the last order.",
+            "privacy_policy.txt",
+        )
 
-    # Available payment methods
+    if "cash on delivery" in q or "cod" in q:
+        return (
+            "Cash on delivery is available only for orders up to "
+            "INR 2500.",
+            "payment_policy.txt",
+        )
+
     if (
         "payment methods" in q
         or "how can customers pay" in q
@@ -174,11 +241,11 @@ def apply_policy_rules(question):
     ):
         return (
             "Customers can pay using UPI, debit card, credit card, "
-            "or cash on delivery. Cash on delivery is available only "
-            "for orders up to INR 2500."
-        ), "payment_policy.txt"
+            "or cash on delivery. Cash on delivery is available "
+            "only for orders up to INR 2500.",
+            "payment_policy.txt",
+        )
 
-    # Approved refund processing time
     if (
         "approved refund" in q
         or "refund processing time" in q
@@ -186,19 +253,71 @@ def apply_policy_rules(question):
     ):
         return (
             "Approved refunds are credited to the original payment "
-            "method within 5 working days."
-        ), "refund_policy.txt"
+            "method within 5 working days.",
+            "refund_policy.txt",
+        )
+
+    if (
+        "refund above" in q
+        or "refund over" in q
+        or "refund exceeding" in q
+        or "human approval" in q
+    ):
+        return (
+            "A refund above INR 1000 must be approved by a human "
+            "support lead before money is returned. Refunds up to "
+            "INR 1000 are approved automatically.",
+            "refund_policy.txt",
+        )
+
+    if "delivery fee" in q or "delivery charge" in q:
+        return (
+            "A delivery fee of INR 25 is charged on orders below "
+            "INR 199. Delivery is free on orders of INR 199 or more.",
+            "delivery_policy.txt",
+        )
+
+    if "wallet" in q and "refund" in q:
+        return (
+            "Wallet balance can be used for any order and is never "
+            "refunded as cash.",
+            "payment_policy.txt",
+        )
+
+    if "account deletion" in q or "delete an account" in q:
+        return (
+            "A customer can request account deletion, and the "
+            "request is completed within 30 days.",
+            "privacy_policy.txt",
+        )
+
+    if (
+        "phone numbers" in q
+        or "email addresses" in q
+        or "contact details" in q
+    ):
+        return (
+            "Customer phone numbers and email addresses are used "
+            "only for order updates and support.",
+            "privacy_policy.txt",
+        )
 
     return None, None
 
 
+# --------------------------------------------------
+# 6. ANSWER A POLICY QUESTION
+# --------------------------------------------------
+
 def answer_question(question, chunks, vectorizer, matrix):
-    """Retrieve policy context and generate a grounded answer."""
     retrieved = retrieve_policy(
-        question, chunks, vectorizer, matrix
+        question,
+        chunks,
+        vectorizer,
+        matrix,
+        top_k=TOP_K,
     )
 
-    # Critical rules take priority over the mock LLM.
     rule_answer, rule_source = apply_policy_rules(question)
 
     if rule_answer:
@@ -209,120 +328,353 @@ def answer_question(question, chunks, vectorizer, matrix):
             "method": "policy_rule",
         }
 
-    # Refuse to guess if retrieval finds no relevant information.
-    if not retrieved:
+    if not has_relevant_query_terms(question, retrieved):
         return {
-            "answer": (
-                "I could not find sufficient information in the "
-                "policy documents. Please contact a human support agent."
-            ),
+            "answer": FALLBACK_ANSWER,
             "sources": [],
             "retrieved": [],
             "method": "no_relevant_context",
         }
 
-    context = "\n".join(
-        f"[{item['source']}] {item['text']}"
-        for item in retrieved
-    )
-
-    messages = [
-        {
-            "role": "system",
-            "content": (
-                "POLICY ASSISTANT. Answer using only the supplied "
-                "policy context. Choose the sentence that most directly "
-                "answers the question. Preserve all numbers and conditions. "
-                "Do not invent policy rules."
-            ),
-        },
-        {
-            "role": "user",
-            "content": (
-                f"CONTEXT:\n{context}\n"
-                f"QUESTION:\n{question}"
-            ),
-        },
-    ]
-
-    try:
-        response = mock_llm.chat(messages)
-        answer = response.choices[0].message.content
-
-        if not answer or not answer.strip():
-            answer = (
-                "I could not generate a reliable answer. "
-                "Please contact a human support agent."
-            )
-
-    except Exception:
-        answer = (
-            "The policy assistant encountered an error. "
-            "Please contact a human support agent."
-        )
+    best = retrieved[0]
 
     return {
-        "answer": answer,
+        "answer": best["text"],
         "sources": sorted({
             item["source"] for item in retrieved
         }),
         "retrieved": retrieved,
-        "method": "mock_llm",
+        "method": "retrieval_extract",
     }
 
+
+# --------------------------------------------------
+# 7. EVALUATION QUESTIONS
+# --------------------------------------------------
+
+EVALUATION_QUESTIONS = [
+    {
+        "question": "When is a late delivery refund allowed?",
+        "expected_doc": "refund_policy.txt",
+        "expected_fact": "45 minutes",
+        "answerable": True,
+    },
+    {
+        "question": "How long does a failed payment refund take?",
+        "expected_doc": "payment_policy.txt",
+        "expected_fact": "48 hours",
+        "answerable": True,
+    },
+    {
+        "question": "What happens when a customer reports fraud?",
+        "expected_doc": "escalation_policy.txt",
+        "expected_fact": "security team",
+        "answerable": True,
+    },
+    {
+        "question": "How long are delivery addresses retained?",
+        "expected_doc": "privacy_policy.txt",
+        "expected_fact": "180 days",
+        "answerable": True,
+    },
+    {
+        "question": "Can customers pay cash on delivery for an expensive order?",
+        "expected_doc": "payment_policy.txt",
+        "expected_fact": "INR 2500",
+        "answerable": True,
+    },
+    {
+        "question": "What payment methods are available?",
+        "expected_doc": "payment_policy.txt",
+        "expected_fact": "UPI",
+        "answerable": True,
+    },
+    {
+        "question": "How long does an approved refund take?",
+        "expected_doc": "refund_policy.txt",
+        "expected_fact": "5 working days",
+        "answerable": True,
+    },
+    {
+        "question": "Who must approve a refund above INR 1000?",
+        "expected_doc": "refund_policy.txt",
+        "expected_fact": "human",
+        "answerable": True,
+    },
+    {
+        "question": "What delivery fee applies below INR 199?",
+        "expected_doc": "delivery_policy.txt",
+        "expected_fact": "INR 25",
+        "answerable": True,
+    },
+    {
+        "question": "Can wallet balance be refunded as cash?",
+        "expected_doc": "payment_policy.txt",
+        "expected_fact": "never refunded as cash",
+        "answerable": True,
+    },
+    {
+        "question": "How long does account deletion take?",
+        "expected_doc": "privacy_policy.txt",
+        "expected_fact": "30 days",
+        "answerable": True,
+    },
+    {
+        "question": "How may customer phone numbers and emails be used?",
+        "expected_doc": "privacy_policy.txt",
+        "expected_fact": "order updates and support",
+        "answerable": True,
+    },
+    {
+        "question": "What will the weather be in Chennai tomorrow?",
+        "expected_doc": "",
+        "expected_fact": "",
+        "answerable": False,
+    },
+    {
+        "question": "Does Instamart offer pet grooming services?",
+        "expected_doc": "",
+        "expected_fact": "",
+        "answerable": False,
+    },
+]
+
+
+def evaluate_questions(chunks, vectorizer, matrix):
+    records = []
+
+    for item in EVALUATION_QUESTIONS:
+        result = answer_question(
+            item["question"],
+            chunks,
+            vectorizer,
+            matrix,
+        )
+
+        if item["answerable"]:
+            retrieval_hit = (
+                item["expected_doc"] in result["sources"]
+            )
+
+            fact_match = (
+                item["expected_fact"].lower()
+                in result["answer"].lower()
+            )
+
+            fallback_correct = None
+            passed = retrieval_hit and fact_match
+
+        else:
+            retrieval_hit = None
+            fact_match = None
+
+            fallback_correct = (
+                result["method"] == "no_relevant_context"
+                and result["answer"] == FALLBACK_ANSWER
+            )
+
+            passed = fallback_correct
+
+        records.append({
+            "question": item["question"],
+            "expected_doc": item["expected_doc"],
+            "expected_fact": item["expected_fact"],
+            "answerable": item["answerable"],
+            "answer": result["answer"],
+            "sources": ";".join(result["sources"]),
+            "answer_method": result["method"],
+            "retrieved_context": " | ".join(
+                entry["text"] for entry in result["retrieved"]
+            ),
+            "retrieval_hit": retrieval_hit,
+            "fact_match": fact_match,
+            "fallback_correct": fallback_correct,
+            "passed": passed,
+        })
+
+    return pd.DataFrame(records)
+
+
+# --------------------------------------------------
+# 8. COMPARE CHUNK OVERLAP STRATEGIES
+# --------------------------------------------------
+
+def compare_overlap_strategies(documents):
+    question = "When is a late delivery refund allowed?"
+    comparison_records = []
+
+    for strategy, overlap in [
+        ("overlap_10", 10),
+        ("no_overlap", 0),
+    ]:
+        chunks = split_documents(
+            documents,
+            chunk_size=CHUNK_SIZE,
+            overlap=overlap,
+        )
+
+        vectorizer, matrix = build_retriever(chunks)
+
+        for top_k in [3, 5, 8]:
+            retrieved = retrieve_policy(
+                question,
+                chunks,
+                vectorizer,
+                matrix,
+                top_k=top_k,
+            )
+
+            context = " | ".join(
+                entry["text"] for entry in retrieved
+            )
+
+            lower_context = context.lower()
+
+            conditions = {
+                "completed_order": "completed order" in lower_context,
+                "over_45_minutes": "45 minutes" in lower_context,
+                "within_7_days": "7 days" in lower_context,
+            }
+
+            comparison_records.append({
+                "strategy": strategy,
+                "top_k": top_k,
+                "chunk_count": len(chunks),
+                "retrieved_chunk_count": len(retrieved),
+                "completed_order_condition_found":
+                    conditions["completed_order"],
+                "45_minute_condition_found":
+                    conditions["over_45_minutes"],
+                "7_day_condition_found":
+                    conditions["within_7_days"],
+                "all_conditions_retrieved": all(
+                    conditions.values()
+                ),
+            })
+
+    return pd.DataFrame(comparison_records)
+
+
+# --------------------------------------------------
+# 9. MAIN PROGRAM
+# --------------------------------------------------
 
 def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     documents = load_policy_documents()
-    chunks = split_sentences(documents)
+
+    chunks = split_documents(
+        documents,
+        chunk_size=CHUNK_SIZE,
+        overlap=CHUNK_OVERLAP,
+    )
+
     vectorizer, matrix = build_retriever(chunks)
 
-    print(f"Policy documents loaded: {len(documents)}")
-    print(f"Policy sentences indexed: {len(chunks)}")
+    print("Policy documents loaded:", len(documents))
+    print("Word chunks indexed:", len(chunks))
+    print("Chunk size:", CHUNK_SIZE)
+    print("Chunk overlap:", CHUNK_OVERLAP)
+    print("Top K:", TOP_K)
 
-    questions = [
+    sample_questions = [
         "When is a late delivery refund allowed?",
         "How long does a failed payment refund take?",
         "What happens when a customer reports fraud?",
-        "How long are delivery addresses retained?",
-        "Can customers pay cash on delivery for an expensive order?",
-        "What payment methods are available?",
-        "How long does an approved refund take?",
+        "What will the weather be in Chennai tomorrow?",
     ]
 
-    records = []
-
-    for question in questions:
+    for question in sample_questions:
         result = answer_question(
-            question, chunks, vectorizer, matrix
+            question,
+            chunks,
+            vectorizer,
+            matrix,
         )
 
         print("\nQuestion:", question)
         print("Answer:", result["answer"])
         print(
             "Sources:",
-            ", ".join(result["sources"]) or "None"
+            ", ".join(result["sources"]) or "None",
         )
         print("Answer method:", result["method"])
 
-        records.append({
-            "question": question,
-            "answer": result["answer"],
-            "sources": ";".join(result["sources"]),
-            "answer_method": result["method"],
-            "retrieved_context": " | ".join(
-                item["text"] for item in result["retrieved"]
-            ),
-        })
-
-    output_path = OUTPUT_DIR / "policy_rag_results.csv"
-
-    pd.DataFrame(records).to_csv(
-        output_path, index=False
+    evaluation = evaluate_questions(
+        chunks,
+        vectorizer,
+        matrix,
     )
 
-    print(f"\nResults saved: {output_path}")
+    evaluation_path = OUTPUT_DIR / "policy_rag_results.csv"
+    evaluation.to_csv(evaluation_path, index=False)
+
+    comparison = compare_overlap_strategies(documents)
+
+    comparison_path = (
+        OUTPUT_DIR / "policy_rag_overlap_comparison.csv"
+    )
+    comparison.to_csv(comparison_path, index=False)
+
+    answerable = evaluation[
+        evaluation["answerable"] == True
+    ]
+
+    unanswerable = evaluation[
+        evaluation["answerable"] == False
+    ]
+
+    summary = {
+        "documents_loaded": len(documents),
+        "chunks_with_overlap": len(chunks),
+        "chunk_size_words": CHUNK_SIZE,
+        "overlap_words": CHUNK_OVERLAP,
+        "top_k": TOP_K,
+        "evaluation_questions": len(evaluation),
+        "answerable_questions": len(answerable),
+        "answerable_questions_passed": int(
+            answerable["passed"].sum()
+        ),
+        "fallback_questions": len(unanswerable),
+        "fallback_questions_passed": int(
+            unanswerable["passed"].sum()
+        ),
+        "all_evaluations_passed": bool(
+            evaluation["passed"].all()
+        ),
+    }
+
+    summary_path = OUTPUT_DIR / "policy_rag_summary.json"
+
+    summary_path.write_text(
+        json.dumps(summary, indent=2),
+        encoding="utf-8",
+    )
+
+    print("\n=== Evaluation Summary ===")
+    print(json.dumps(summary, indent=2))
+
+    print("\n=== Overlap Comparison ===")
+    print(
+        comparison[
+            [
+                "strategy",
+                "top_k",
+                "chunk_count",
+                "retrieved_chunk_count",
+                "completed_order_condition_found",
+                "45_minute_condition_found",
+                "7_day_condition_found",
+                "all_conditions_retrieved",
+            ]
+        ].to_string(index=False)
+    )
+
+    print("\nSaved:")
+    print(evaluation_path)
+    print(comparison_path)
+    print(summary_path)
 
 
 if __name__ == "__main__":

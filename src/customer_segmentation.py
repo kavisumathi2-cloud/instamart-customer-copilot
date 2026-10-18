@@ -12,13 +12,8 @@ from sklearn.decomposition import PCA
 # ==================================================
 
 ROOT = Path(__file__).resolve().parent.parent
-
 DATA_DIR = ROOT / "data"
 CLEAN_DIR = DATA_DIR / "clean"
-
-# Support the current folder until we migrate to data/clean.
-if not CLEAN_DIR.exists():
-    CLEAN_DIR = DATA_DIR / "cleaned"
 
 INPUT_PATH = CLEAN_DIR / "customer_features.csv"
 
@@ -36,13 +31,30 @@ RANDOM_STATE = 42
 # 2. LOAD CUSTOMER FEATURES
 # ==================================================
 
+if not INPUT_PATH.exists():
+    raise FileNotFoundError(
+        f"Missing {INPUT_PATH}. Run customer_features.py first."
+    )
+
 df = pd.read_csv(INPUT_PATH)
+
+required_columns = {
+    "customer_id",
+    "completed_orders",
+    "completed_spend",
+    "last_order_ts",
+}
+missing_columns = required_columns - set(df.columns)
+
+if missing_columns:
+    raise ValueError(
+        f"Missing columns in customer_features.csv: {missing_columns}"
+    )
 
 df["last_order_ts"] = pd.to_datetime(
     df["last_order_ts"], errors="coerce"
 )
 
-# Ensure numeric feature columns are numeric.
 df["completed_orders"] = pd.to_numeric(
     df["completed_orders"], errors="coerce"
 ).fillna(0)
@@ -51,15 +63,13 @@ df["completed_spend"] = pd.to_numeric(
     df["completed_spend"], errors="coerce"
 ).fillna(0)
 
-# Keep only customers with at least one completed order
-# for the K-Means clustering.
+# Only customers with completed-order history are eligible.
 active = df[df["completed_orders"] > 0].copy()
 
 # ==================================================
 # 3. CREATE RFM FEATURES
 # ==================================================
 
-# Fixed snapshot date required by the project brief.
 active["recency"] = (
     SNAPSHOT_DATE - active["last_order_ts"]
 ).dt.total_seconds() / 86400
@@ -69,8 +79,18 @@ active["monetary"] = active["completed_spend"]
 
 feature_columns = ["recency", "frequency", "monetary"]
 
-# Rows without a valid last completed order cannot be clustered.
+# Customers without a valid last order cannot be clustered.
 active = active.dropna(subset=feature_columns).copy()
+
+if len(active) < 8:
+    raise ValueError(
+        "At least 8 eligible customers are needed to evaluate K=2 to K=8."
+    )
+
+if (active["recency"] < 0).any():
+    raise ValueError(
+        "Negative recency found. Check the snapshot date and order timestamps."
+    )
 
 X = active[feature_columns].copy()
 
@@ -78,7 +98,7 @@ print("=" * 55)
 print("CUSTOMER SEGMENTATION")
 print("=" * 55)
 
-print("RFM snapshot date:", SNAPSHOT_DATE)
+print("RFM snapshot date:", SNAPSHOT_DATE.date())
 print("Customers with completed orders:", len(active))
 
 print("\nRFM summary:")
@@ -113,9 +133,9 @@ for k in range(2, 9):
 
     score_rows.append({
         "k": k,
-        "inertia": round(model.inertia_, 1),
+        "inertia": round(float(model.inertia_), 1),
         "silhouette": round(
-            silhouette_score(X_scaled, labels), 3
+            float(silhouette_score(X_scaled, labels)), 3
         ),
     })
 
@@ -137,7 +157,7 @@ final_model = KMeans(
 
 active["segment_id"] = final_model.fit_predict(X_scaled)
 
-# Assign descriptive names based on ascending average spend.
+# Name clusters by ascending average monetary value.
 spending_order = (
     active.groupby("segment_id")["monetary"]
     .mean()
@@ -158,10 +178,8 @@ name_mapping = {
 
 active["segment_name"] = active["segment_id"].map(name_mapping)
 
-# Premium is defined as the highest-average-spend cluster.
-active["is_premium"] = (
-    active["segment_name"] == "Top Value"
-)
+# Premium means membership in the highest-spending cluster.
+active["is_premium"] = active["segment_name"].eq("Top Value")
 
 # ==================================================
 # 7. PCA EXPLAINED VARIANCE
@@ -171,32 +189,22 @@ pca = PCA(n_components=2)
 pca.fit(X_scaled)
 
 print("\nPCA explained variance ratio:")
-print("PC1:", round(pca.explained_variance_ratio_[0], 3))
-print("PC2:", round(pca.explained_variance_ratio_[1], 3))
+print("PC1:", round(float(pca.explained_variance_ratio_[0]), 3))
+print("PC2:", round(float(pca.explained_variance_ratio_[1]), 3))
 print(
     "Combined:",
-    round(pca.explained_variance_ratio_.sum(), 3),
+    round(float(pca.explained_variance_ratio_.sum()), 3),
 )
 
 # ==================================================
-# 8. PREPARE REQUIRED OUTPUT SCHEMA
+# 8. PREPARE REQUIRED OUTPUT
 # ==================================================
 
-# Include all customers, including those without completed orders.
-# Such customers are not assigned a K-Means cluster.
-inactive = df[df["completed_orders"] == 0].copy()
+# Keep only eligible customers in the RFM segmentation output.
+# Customers with no completed orders remain in the source data,
+# but they are not assigned to a K-Means cluster.
 
-inactive_result = pd.DataFrame({
-    "customer_id": inactive["customer_id"],
-    "recency": float("nan"),
-    "frequency": 0,
-    "monetary": 0,
-    "segment_id": pd.NA,
-    "segment_name": "No Completed Orders",
-    "is_premium": False,
-})
-
-active_result = active[[
+result = active[[
     "customer_id",
     "recency",
     "frequency",
@@ -206,26 +214,12 @@ active_result = active[[
     "is_premium",
 ]].copy()
 
-result = pd.concat(
-    [active_result, inactive_result],
-    ignore_index=True,
-)
-
 result["segment_id"] = result["segment_id"].astype("Int64")
 result["is_premium"] = result["is_premium"].astype(bool)
 
-# Keep only the exact required columns, in the required order.
-result = result[[
-    "customer_id",
-    "recency",
-    "frequency",
-    "monetary",
-    "segment_id",
-    "segment_name",
-    "is_premium",
-]]
-
-result = result.sort_values("customer_id").reset_index(drop=True)
+result = result.sort_values(
+    "customer_id"
+).reset_index(drop=True)
 
 # ==================================================
 # 9. SAVE AND PRINT RESULTS
