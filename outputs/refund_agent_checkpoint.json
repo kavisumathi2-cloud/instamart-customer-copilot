@@ -1,6 +1,6 @@
 {
   "order_id": "ORD-110603",
-  "request_days": 3,
+  "request_days": 3.0,
   "status": "simulated_refund_issued",
   "steps": [
     {
