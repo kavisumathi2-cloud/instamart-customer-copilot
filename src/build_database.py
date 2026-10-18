@@ -1,5 +1,4 @@
-
-from pathlib import Path
+﻿from pathlib import Path
 import sqlite3
 import pandas as pd
 
@@ -15,6 +14,7 @@ def main():
         "customers.csv": "customers",
         "products.csv": "products",
         "orders.csv": "orders",
+        "tickets.csv": "tickets",
     }
 
     with sqlite3.connect(DB_PATH) as conn:
@@ -27,24 +27,14 @@ def main():
                 )
 
             df = pd.read_csv(file_path)
-
-            df.to_sql(
-                table_name,
-                conn,
-                if_exists="replace",
-                index=False,
-            )
-
+            df.to_sql(table_name, conn, if_exists="replace", index=False)
             print(f"{table_name}: {len(df)} rows loaded")
 
-        # Verify the actual row counts inside SQLite.
         print("\nDatabase verification:")
-
         for table_name in tables.values():
             count = conn.execute(
                 f"SELECT COUNT(*) FROM {table_name}"
             ).fetchone()[0]
-
             print(f"{table_name}: {count} rows")
 
     print(f"\nDatabase created at: {DB_PATH}")
