@@ -11,13 +11,13 @@ The project demonstrates how data and machine learning can help an e-commerce bu
 ## Project Objectives
 
 - Build and validate a structured data foundation using Python, pandas, and SQLite.
-- Analyse orders and customer spending using SQL.
+- Analyse customer orders and spending using SQL.
 - Segment customers based on purchasing behaviour.
 - Predict customers who may lapse using machine learning.
-- Classify support tickets and route them to appropriate support teams.
+- Classify support tickets and apply routing and safety guardrails.
 - Retrieve relevant policy information for customer questions.
-- Simulate refund decisions with eligibility checks and safety guardrails.
-- Test key project behaviour and document the results.
+- Simulate refund decisions with eligibility checks and safety controls.
+- Test important project behaviour and document evaluation results.
 
 ## Technology Stack
 
@@ -29,6 +29,7 @@ The project demonstrates how data and machine learning can help an e-commerce bu
 - joblib
 - Python standard library
 - Git and GitHub
+- pytest
 
 ## Project Structure
 
@@ -39,8 +40,8 @@ instamart-customer-copilot/
 │   ├── clean/
 │   ├── policies/
 │   └── instamart.db
-├── models/
-├── outputs/
+├── sql/
+│   └── queries.sql
 ├── src/
 │   ├── build_database.py
 │   ├── check_database.py
@@ -55,60 +56,88 @@ instamart-customer-copilot/
 │   └── refund_agent.py
 ├── tests/
 │   └── test_refund_agent.py
+├── outputs/
+├── state/
 ├── generate_data.py
 ├── mock_llm.py
-├── README.md
-└── requirements.txt
+├── requirements.txt
+├── .gitignore
+└── README.md
 ```
 
-The `outputs/` directory contains generated datasets, model artifacts, evaluation results, and refund-agent demo files. The exact files may vary depending on which scripts have been run and which generated artifacts are committed.
+The `outputs/` directory contains generated datasets, model artifacts, evaluation results, and demonstration logs. The `state/` directory stores refund-agent workflow checkpoints when generated. Runtime-generated files may vary depending on which scripts have been executed.
 
 ## Setup and Reproduction
 
-Run commands from the repository root using Python 3.11 or later. Install the dependencies listed in `requirements.txt` and activate the virtual environment before running the scripts.
+Run commands from the repository root using Python 3.11 or later.
 
-### Windows PowerShell
+### 1. Create a virtual environment
 
-Create a virtual environment:
+Windows PowerShell:
 
 ```powershell
 python -m venv .venv
 ```
 
-Activate it:
+### 2. Activate the virtual environment
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
 ```
 
-Install dependencies:
+If PowerShell blocks script execution, run this in the same terminal and then activate the environment:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
+.\.venv\Scripts\Activate.ps1
+```
+
+### 3. Install dependencies
 
 ```powershell
 pip install -r requirements.txt
 ```
 
-### Run the project
-
-Run the scripts in the order required by their input files:
+### 4. Generate and prepare the data
 
 ```powershell
 python generate_data.py
 python src/clean_data.py
 python src/build_database.py
 python src/check_database.py
+```
+
+### 5. Run SQL analysis and customer analytics
+
+```powershell
 python src/sql_analysis.py
 python src/customer_features.py
 python src/customer_segmentation.py
 python src/lapse_prediction.py
+```
+
+### 6. Run support ticket triage and policy retrieval
+
+```powershell
 python src/ticket_triage.py
 python src/policy_rag.py
+```
+
+### 7. Run the refund-agent demonstration
+
+```powershell
 python src/refund_agent.py
+```
+
+### 8. Run automated tests
+
+```powershell
 python -m pytest -q
 ```
 
-Some scripts generate or overwrite files. Review script configuration and output paths before rerunning the complete workflow.
+The most recently verified test run completed with **12 passed**.
 
-The provided `generate_data.py` and `mock_llm.py` files are used as project dependencies and should remain unmodified.
+**Reproduction note:** Some scripts create or overwrite generated files. Running the complete workflow again can change dataset counts, evaluation results, or generated artifacts if the data or configuration differs. Check the current outputs after rerunning the workflow. The provided `generate_data.py` and `mock_llm.py` files are used as project dependencies and should remain unmodified.
 
 ## Part A — Data Engineering, SQL and EDA
 
@@ -116,51 +145,64 @@ The provided `generate_data.py` and `mock_llm.py` files are used as project depe
 
 Synthetic Instamart-style datasets are generated using `generate_data.py`. The project cleans the datasets, validates their contents, and loads them into a SQLite database.
 
-The database contains customer, product, order, and support ticket information.
+The datasets cover customers, products, orders, and support tickets.
 
 ### Data Cleaning and Database
 
-The cleaning process checks for duplicate records and prepares the datasets for analysis. The cleaned datasets are stored under `data/clean/`.
+The data-cleaning workflow checks duplicate records, handles invalid values, and prepares the data for analysis. The cleaned CSV files are stored under `data/clean/`.
 
-The previously verified database contained:
+The latest verified cleaned-data counts were:
 
 | Dataset | Records |
 |---|---:|
 | Customers | 1,200 |
 | Products | 40 |
-| Orders | 12,965 |
+| Orders | 12,309 |
 | Support tickets | 164 |
 
-### SQL Analysis Results
+The raw order data contained duplicate records and pending orders. The cleaning process removed duplicate records and excluded pending orders from the cleaned order dataset.
 
-The previously verified SQL analysis returned the following order status counts:
+### SQL Analysis
 
-| Status | Orders |
+SQL queries are used to analyse customer spending, order activity, product performance, and order trends.
+
+The verified cleaned order dataset contained:
+
+| Order status | Orders |
 |---|---:|
 | Completed | 11,110 |
 | Cancelled | 1,199 |
-| Pending | 656 |
-| **Total** | **12,965** |
+| **Total cleaned orders** | **12,309** |
 
-The previously reported total order amount was **₹3,465,352.30**.
+The previously verified completed-order spending total was **₹2,998,668.80**.
 
-These figures are from an earlier verified run. If the current database produces different results, rerun `src/sql_analysis.py` and update this section using the actual output from that run.
+The SQL analysis includes:
 
-The SQL analysis also identifies customers with high order counts and high total spending. These aggregations demonstrate how SQL can support business reporting and customer analysis.
+- Customers ranked by total spending.
+- Customer order counts and spending summaries.
+- Product and category performance.
+- Customers without completed orders.
+- Date-based order analysis and cumulative spending.
+
+These aggregations demonstrate how SQL can support business reporting and customer analysis.
 
 ### Main Outputs
 
-- Cleaned datasets under `data/clean/`
-- SQLite database: `data/instamart.db`
-- SQL analysis script: `src/sql_analysis.py`
+- `data/clean/customers.csv`
+- `data/clean/products.csv`
+- `data/clean/orders.csv`
+- `data/instamart.db`
+- `sql/queries.sql`
 
 ## Part B — Customer Segmentation and Lapse Prediction
 
 ### Customer Segmentation
 
-Customer features are calculated from order history, including order counts, completed spending, and order recency. Customers are grouped into behavioural segments to help the business understand differences in purchasing activity.
+Customer features are calculated from order history, including order frequency, completed spending, and recency.
 
-The latest documented segment counts are:
+K-Means clustering is evaluated using silhouette scores. PCA is also used to examine feature variation in a lower-dimensional representation.
+
+The latest verified segmentation run produced:
 
 | Segment | Customers |
 |---|---:|
@@ -171,15 +213,15 @@ The latest documented segment counts are:
 | No Completed Orders | 25 |
 | **Total** | **1,200** |
 
-These segments can support targeted promotions, customer engagement, and support prioritisation. Segment names describe the project's configured rules and should not be interpreted as universal customer categories.
+The premium-customer flag identifies customers selected for additional support prioritisation according to the configured segmentation rules.
 
-The segmentation workflow also evaluates K-Means clustering configurations using silhouette scores and uses PCA to examine feature variation in a lower-dimensional representation.
+These segments can help businesses design customer engagement strategies and prioritize support. Segment names describe the project's configured rules and should not be interpreted as universal customer categories.
 
 ### Lapse Prediction
 
-A machine learning model predicts whether a customer may lapse based on historical customer behaviour and a defined prediction target.
+The lapse-prediction component uses historical customer behaviour to estimate whether a customer may lapse within a defined target window.
 
-The project compares candidate models using cross-validation and selects a Random Forest model based on its F1 score.
+The workflow compares candidate models using cross-validation and selects a Random Forest model based on its cross-validation F1 score.
 
 The previously recorded evaluation metrics were:
 
@@ -190,11 +232,11 @@ The previously recorded evaluation metrics were:
 | Lapsed-class recall | 0.652 |
 | Lapsed-class F1 score | 0.655 |
 
-These metrics describe a recorded evaluation run and may change when the data, feature definitions, or evaluation configuration changes.
+Precision indicates how many customers predicted as lapsed were actually lapsed. Recall indicates how many actual lapsed customers were identified. The F1 score balances precision and recall.
 
-The project also generates a retention list to help prioritise customers predicted to be at risk of lapsing.
+The project also generates a retention list to help prioritize customers predicted to be at risk of lapsing.
 
-**Evaluation limitation:** The lapse target uses a defined time window. Features must be restricted to information available before the prediction cutoff to avoid temporal leakage. The retention list is an illustrative prioritisation output, not a guarantee of successful customer retention.
+**Evaluation limitation:** Lapse predictions depend on the selected cutoff date, target window, features, and evaluation split. Features should only use information available before the prediction cutoff to prevent temporal leakage. The retention list is an illustrative prioritisation output, not a guarantee of successful customer retention.
 
 ### Main Outputs
 
@@ -207,11 +249,15 @@ The project also generates a retention list to help prioritise customers predict
 
 ### Ticket Classification
 
-The ticket triage component classifies support tickets into billing, delivery, fraud, and technical categories. It uses zero-shot and few-shot classification workflows, validates model outputs, and applies keyword fallback handling when required.
+The ticket-triage component classifies support tickets into categories such as billing, delivery, fraud, and technical issues.
+
+It evaluates zero-shot and few-shot classification workflows, validates model outputs, and applies keyword-based fallback handling when required.
 
 Potentially sensitive information is redacted before ticket processing.
 
-The recorded PII audit found the following before redaction:
+### PII Redaction Results
+
+The recorded audit found the following values before and after redaction:
 
 | PII type | Detected before redaction | Detected after redaction |
 |---|---:|---:|
@@ -219,11 +265,11 @@ The recorded PII audit found the following before redaction:
 | Phone numbers | 91 | 0 |
 | Order IDs | 132 | 0 |
 
-These results reflect the patterns checked by the implemented audit and do not guarantee that every possible sensitive value is detected.
+These results reflect the patterns checked by the implemented audit. They do not guarantee that every possible sensitive value will be detected.
 
-### Classification Results
+### Few-Shot Classification Results
 
-The recorded final few-shot run processed 164 tickets.
+The recorded final few-shot evaluation processed 164 tickets.
 
 | Metric | Result |
 |---|---:|
@@ -238,17 +284,25 @@ The recorded final few-shot run processed 164 tickets.
 | Tokens used | 22,660 |
 | Accuracy on valid classifications | 100% |
 
-Accuracy is calculated on the 147 valid classifications in the recorded final few-shot run. It excludes tickets without a valid classification. The result applies to this synthetic dataset and evaluation configuration and is not a guarantee of real-world performance.
+Accuracy is calculated on the 147 valid classifications and excludes tickets without a valid classification. The result applies to the synthetic dataset and evaluation configuration; it is not a guarantee of real-world performance.
 
 ### Token Budget Evaluation
 
-A separate budget demonstration used a token budget of 6,000. It used 5,951 tokens and made 80 model calls, producing 76 classifications before the remaining tickets were affected by budget exhaustion.
+A separate budget demonstration used a token budget of 6,000.
 
-The measured accuracy for this budget run was approximately 84.21% on its valid classifications. This result should be considered separately from the final few-shot run.
+| Metric | Result |
+|---|---:|
+| Token budget | 6,000 |
+| Tokens used | 5,951 |
+| Model calls | 80 |
+| Valid classifications | 76 |
+| Accuracy on valid classifications | Approximately 84.21% |
+
+The budget-limited result is evaluated separately from the final few-shot run. It demonstrates how token budgets can limit the number of tickets processed.
 
 ### Routing and Guardrails
 
-The system routes tickets to support queues based on classification and configured priority rules. Invalid outputs, empty tickets, long inputs, and token-budget exhaustion are tracked for monitoring and safer handling.
+The workflow tracks invalid model outputs, empty tickets, long inputs, classification fallbacks, and token-budget exhaustion. Configured classification and priority rules help route tickets to appropriate support queues.
 
 ### Main Outputs
 
@@ -266,40 +320,48 @@ The system routes tickets to support queues based on classification and configur
 
 The policy assistant loads policy documents, splits them into word chunks, and retrieves relevant information using TF-IDF similarity. Deterministic policy rules handle recognized policy questions, while a fallback response is used when relevant policy information cannot be found.
 
-The recorded evaluation loaded 5 policy documents and indexed 15 overlapping word chunks, using a chunk size of 40 words, an overlap of 10 words, and top-3 retrieval.
+The recorded evaluation used:
 
-| Evaluation | Result |
+| Setting | Result |
 |---|---:|
-| Total evaluation questions | 14 |
-| Answerable questions | 12 |
-| Answerable questions passed | 12 |
-| Fallback questions | 2 |
-| Fallback questions passed | 2 |
-| Overall evaluation | 14/14 passed |
+| Policy documents | 5 |
+| Indexed chunks | 15 |
+| Chunk size | 40 words |
+| Chunk overlap | 10 words |
+| Default retrieved chunks | 3 |
+| Evaluation questions | 14 |
+| Answerable questions passed | 12/12 |
+| Fallback questions passed | 2/2 |
+| Overall evaluation | 14/14 |
 
-The overlap comparison showed that retrieval results depend on chunking and the number of retrieved chunks. In the recorded comparison, the overlapping strategy missed the 7-day condition at top-3, but retrieved all three required conditions at top-5. The no-overlap strategy retrieved all three conditions at top-3 in that experiment.
+### Retrieval Comparison
 
-These results illustrate that overlap does not automatically guarantee better retrieval. Retrieved information must still be checked for relevance and completeness.
+The overlap comparison demonstrated that retrieval results depend on chunking and the number of retrieved chunks.
+
+In the recorded comparison, the overlapping strategy with top-3 retrieval missed the 7-day request condition. Increasing retrieval to top-5 retrieved all three required conditions. The no-overlap strategy retrieved all three conditions at top-3 in that experiment.
+
+This demonstrates that overlap does not automatically guarantee better retrieval. Retrieved information must still be checked for relevance and completeness.
 
 ### Simulated Refund Agent
 
-The refund agent follows a controlled workflow to evaluate refund requests against configured rules. These include order status, delivery delay, request timing, and the automatic refund limit.
+The refund agent follows a controlled workflow to evaluate refund requests against configured rules.
 
-The configured rules include:
+The configured guardrails include:
 
 - Late-delivery eligibility requires a completed order with a delivery time greater than 45 minutes.
 - The refund request must be within the configured 7-day request window.
 - The automatic refund limit is ₹1,000.
 - Requests that fail eligibility checks are rejected or handled according to the workflow's guardrails.
-- Eligible requests within the automatic limit can proceed through the simulated refund workflow.
+- Eligible requests within the automatic refund limit can proceed through the simulated refund workflow.
+- Workflow state is checkpointed to support inspection and recovery.
 
-### Successful Demo
+### Successful Demonstration
 
-The successful demonstration used the following details:
+The recorded successful demo used the following details:
 
 | Field | Result |
 |---|---|
-| Order ID | `ORD-110603` |
+| Order ID | ORD-110603 |
 | Order amount | ₹58.00 |
 | Actual delivery time | 70 minutes |
 | Request age | 3 days |
@@ -308,11 +370,17 @@ The successful demonstration used the following details:
 | LLM calls | 5 |
 | Final answer | `REFUND: INR 58.0 issued.` |
 
-The agent reported a successful simulated refund because the demo order met the configured late-delivery, request-window, and automatic refund-limit conditions.
+The demo order met the configured late-delivery, request-window, and automatic refund-limit conditions.
 
-**Safety boundary:** This is a simulation only. It does not connect to a payment gateway or transfer real money. The checkpoint file records workflow state for inspection and recovery.
+A request made after the configured 7-day window can be rejected. In a separate recorded check, the same demo order was rejected when the request age was 8 days.
 
-A request raised after the configured 7-day window can be rejected. For example, the same demo order was rejected when the request age was 8 days.
+### Scenario and Recovery Testing
+
+The seven recorded refund scenarios matched their expected outcomes and refund amounts. The project also tested token-limit and timeout guardrails.
+
+A simulated crash-and-resume test confirmed that the agent could continue from a saved checkpoint without repeating the initial order-lookup tool call in that test.
+
+**Safety boundary:** Refunds are simulated only. The agent does not connect to a payment gateway or transfer real money. Its outputs demonstrate workflow behaviour rather than production payment processing.
 
 ### Main Outputs
 
@@ -320,21 +388,28 @@ A request raised after the configured 7-day window can be rejected. For example,
 - `outputs/policy_rag_overlap_comparison.csv`
 - `outputs/policy_rag_summary.json`
 - `outputs/refund_agent_demo.json`
-- `outputs/refund_agent_checkpoint.json`
+- `outputs/agent_runs.jsonl`
+- `outputs/refund_ledger.jsonl`
+
+Runtime checkpoint files may be stored in `state/` or other configured checkpoint paths. Their presence depends on the scripts executed and the repository's file-tracking configuration.
 
 ## Testing
 
-The project includes automated tests for important refund agent workflow and guardrail behaviour.
+The project includes automated tests for important refund-agent workflow and guardrail behaviour.
 
-Run the tests from the project root:
+Run the test suite from the repository root:
 
 ```powershell
 python -m pytest -q
 ```
 
-The latest previously recorded test result was **12 tests passed**. Rerun the test command after making changes to verify the current state.
+The latest verified run completed with:
 
-The recorded test suite covers refund-agent behaviour. Additional automated tests would be needed to comprehensively validate every component of the project.
+```text
+12 passed
+```
+
+The test suite covers refund-agent behaviour. Additional automated tests would be needed to comprehensively validate every project component.
 
 ## Limitations and Next Steps
 
@@ -344,12 +419,13 @@ The recorded test suite covers refund-agent behaviour. Additional automated test
 - Lapse predictions are estimates and should not be treated as certain outcomes.
 - Temporal leakage must be avoided by using only features available before the prediction cutoff.
 - Ticket classification results may not generalize to real-world customer support messages.
-- PII redaction depends on the patterns implemented and may not identify every possible sensitive value.
+- PII redaction depends on implemented detection patterns and may not identify every possible sensitive value.
 - Policy retrieval depends on the available documents, chunking strategy, and retrieval quality.
 - The refund agent simulates decisions and does not issue actual refunds.
 - Production use would require stronger monitoring, security controls, policy validation, and integration testing.
+- Recorded evaluation results should be regenerated when data or configurations change.
 
-Possible future improvements include evaluating the system on additional datasets, expanding automated tests, improving ticket classification robustness, and monitoring retrieval quality across different chunking configurations.
+Possible future improvements include evaluating the system on additional datasets, expanding automated tests, improving ticket-classification robustness, improving retrieval evaluation, and monitoring model performance over time.
 
 ## Conclusion
 
