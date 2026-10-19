@@ -2,7 +2,7 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
-state/
+
 outputs/refund_agent_*.json
 src/refund_agent_backup.py
 outputs/refund_agent_checkpoint.json
