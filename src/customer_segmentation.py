@@ -7,6 +7,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import silhouette_score
 from sklearn.decomposition import PCA
 
+
 # ==================================================
 # 1. PROJECT PATHS AND SETTINGS
 # ==================================================
@@ -28,12 +29,12 @@ RANDOM_STATE = 42
 
 
 # ==================================================
-# 2. LOAD CUSTOMER FEATURES
+# 2. LOAD AND VALIDATE CUSTOMER FEATURES
 # ==================================================
 
 if not INPUT_PATH.exists():
     raise FileNotFoundError(
-        f"Missing {INPUT_PATH}. Run customer_features.py first."
+        f"Missing {INPUT_PATH}. Run src/customer_features.py first."
     )
 
 df = pd.read_csv(INPUT_PATH)
@@ -44,12 +45,19 @@ required_columns = {
     "completed_spend",
     "last_order_ts",
 }
+
 missing_columns = required_columns - set(df.columns)
 
 if missing_columns:
     raise ValueError(
         f"Missing columns in customer_features.csv: {missing_columns}"
     )
+
+if df["customer_id"].isna().any():
+    raise ValueError("Missing customer_id values found.")
+
+if df["customer_id"].duplicated().any():
+    raise ValueError("Duplicate customer_id values found.")
 
 df["last_order_ts"] = pd.to_datetime(
     df["last_order_ts"], errors="coerce"
@@ -63,12 +71,19 @@ df["completed_spend"] = pd.to_numeric(
     df["completed_spend"], errors="coerce"
 ).fillna(0)
 
-# Only customers with completed-order history are eligible.
-active = df[df["completed_orders"] > 0].copy()
+if (df["completed_orders"] < 0).any():
+    raise ValueError("Negative completed_orders values found.")
+
+if (df["completed_spend"] < 0).any():
+    raise ValueError("Negative completed_spend values found.")
+
 
 # ==================================================
-# 3. CREATE RFM FEATURES
+# 3. SEPARATE ELIGIBLE AND NO-ORDER CUSTOMERS
 # ==================================================
+
+# Only customers with completed-order history enter K-Means.
+active = df[df["completed_orders"] > 0].copy()
 
 active["recency"] = (
     SNAPSHOT_DATE - active["last_order_ts"]
@@ -79,45 +94,54 @@ active["monetary"] = active["completed_spend"]
 
 feature_columns = ["recency", "frequency", "monetary"]
 
-# Customers without a valid last order cannot be clustered.
-active = active.dropna(subset=feature_columns).copy()
+# Customers with invalid RFM data cannot enter K-Means.
+valid_mask = (
+    active[feature_columns].notna().all(axis=1)
+    & (active["recency"] >= 0)
+)
 
-if len(active) < 8:
+eligible = active.loc[valid_mask].copy()
+invalid_rfm = active.loc[~valid_mask].copy()
+
+no_orders = df[df["completed_orders"] <= 0].copy()
+
+if len(eligible) < 8:
     raise ValueError(
         "At least 8 eligible customers are needed to evaluate K=2 to K=8."
     )
 
-if (active["recency"] < 0).any():
-    raise ValueError(
-        "Negative recency found. Check the snapshot date and order timestamps."
-    )
-
-X = active[feature_columns].copy()
+X = eligible[feature_columns].copy()
 
 print("=" * 55)
 print("CUSTOMER SEGMENTATION")
 print("=" * 55)
 
 print("RFM snapshot date:", SNAPSHOT_DATE.date())
+print("Total source customers:", len(df))
 print("Customers with completed orders:", len(active))
+print("Eligible customers for clustering:", len(eligible))
+print("Customers with no completed orders:", len(no_orders))
+print("Customers with invalid RFM data:", len(invalid_rfm))
 
 print("\nRFM summary:")
 print(
-    active[feature_columns]
+    eligible[feature_columns]
     .agg(["mean", "median", "min", "max"])
     .round(2)
     .to_string()
 )
 
+
 # ==================================================
-# 4. SCALE FEATURES
+# 4. SCALE RFM FEATURES
 # ==================================================
 
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X)
 
+
 # ==================================================
-# 5. EVALUATE K FROM 2 TO 8
+# 5. EVALUATE K-MEANS FROM K=2 TO K=8
 # ==================================================
 
 score_rows = []
@@ -145,8 +169,9 @@ scores.to_csv(SCORES_PATH, index=False)
 print("\nK-Means evaluation:")
 print(scores.to_string(index=False))
 
+
 # ==================================================
-# 6. FINAL K-MEANS MODEL: K = 4
+# 6. FINAL K-MEANS MODEL: K=4
 # ==================================================
 
 final_model = KMeans(
@@ -155,11 +180,11 @@ final_model = KMeans(
     n_init=10,
 )
 
-active["segment_id"] = final_model.fit_predict(X_scaled)
+eligible["segment_id"] = final_model.fit_predict(X_scaled)
 
-# Name clusters by ascending average monetary value.
+# Name clusters according to ascending average monetary value.
 spending_order = (
-    active.groupby("segment_id")["monetary"]
+    eligible.groupby("segment_id")["monetary"]
     .mean()
     .sort_values()
 )
@@ -176,10 +201,11 @@ name_mapping = {
     for index, cluster_id in enumerate(spending_order.index)
 }
 
-active["segment_name"] = active["segment_id"].map(name_mapping)
+eligible["segment_name"] = eligible["segment_id"].map(name_mapping)
 
-# Premium means membership in the highest-spending cluster.
-active["is_premium"] = active["segment_name"].eq("Top Value")
+# Premium customers belong to the highest-spending cluster.
+eligible["is_premium"] = eligible["segment_name"].eq("Top Value")
+
 
 # ==================================================
 # 7. PCA EXPLAINED VARIANCE
@@ -196,15 +222,12 @@ print(
     round(float(pca.explained_variance_ratio_.sum()), 3),
 )
 
+
 # ==================================================
-# 8. PREPARE REQUIRED OUTPUT
+# 8. BUILD OUTPUT FOR ALL CUSTOMERS
 # ==================================================
 
-# Keep only eligible customers in the RFM segmentation output.
-# Customers with no completed orders remain in the source data,
-# but they are not assigned to a K-Means cluster.
-
-result = active[[
+output_columns = [
     "customer_id",
     "recency",
     "frequency",
@@ -212,31 +235,75 @@ result = active[[
     "segment_id",
     "segment_name",
     "is_premium",
-]].copy()
+]
+
+# Customers assigned to K-Means clusters.
+clustered_result = eligible[output_columns].copy()
+
+# Customers without completed orders still appear in the output.
+no_orders_result = no_orders[["customer_id"]].copy()
+no_orders_result["recency"] = float("nan")
+no_orders_result["frequency"] = 0
+no_orders_result["monetary"] = 0
+no_orders_result["segment_id"] = pd.NA
+no_orders_result["segment_name"] = "No Completed Orders"
+no_orders_result["is_premium"] = False
+
+# Customers with completed orders but invalid RFM features.
+invalid_result = invalid_rfm[["customer_id"]].copy()
+invalid_result["recency"] = invalid_rfm["recency"]
+invalid_result["frequency"] = invalid_rfm["frequency"]
+invalid_result["monetary"] = invalid_rfm["monetary"]
+invalid_result["segment_id"] = pd.NA
+invalid_result["segment_name"] = "Insufficient RFM Data"
+invalid_result["is_premium"] = False
+
+# Combine all groups into one customer-level output.
+result = pd.concat(
+    [
+        clustered_result,
+        no_orders_result[output_columns],
+        invalid_result[output_columns],
+    ],
+    ignore_index=True,
+)
 
 result["segment_id"] = result["segment_id"].astype("Int64")
-result["is_premium"] = result["is_premium"].astype(bool)
+result["is_premium"] = result["is_premium"].fillna(False).astype(bool)
 
 result = result.sort_values(
     "customer_id"
 ).reset_index(drop=True)
 
+
 # ==================================================
-# 9. SAVE AND PRINT RESULTS
+# 9. VALIDATE AND SAVE OUTPUT
 # ==================================================
+
+if len(result) != len(df):
+    raise AssertionError(
+        f"Output has {len(result)} rows; expected {len(df)} customers."
+    )
+
+if result["customer_id"].duplicated().any():
+    raise AssertionError("Duplicate customer IDs found in output.")
+
+if result["customer_id"].nunique() != df["customer_id"].nunique():
+    raise AssertionError("Some customers are missing from the output.")
 
 result.to_csv(OUTPUT_PATH, index=False)
 
 print("\nCustomer segmentation completed!")
-print("Customers included in clustering:", len(active))
-print("Total customers in output:", len(result))
+print("Total source customers:", len(df))
+print("Customers included in output:", len(result))
+print("Customers assigned to K-Means:", len(eligible))
 
 print("\nCustomers in each segment:")
-print(result["segment_name"].value_counts().to_string())
+print(result["segment_name"].value_counts(dropna=False).to_string())
 
-print("\nAverage RFM behaviour by segment:")
+print("\nAverage RFM behaviour by clustered segment:")
 print(
-    active.groupby("segment_name")[
+    eligible.groupby("segment_name")[
         ["recency", "frequency", "monetary"]
     ].mean().round(2).to_string()
 )
@@ -248,3 +315,5 @@ print(result.columns.tolist())
 
 print("\nSaved customer segments:", OUTPUT_PATH)
 print("Saved K-Means scores:", SCORES_PATH)
+
+print("\nALL SEGMENTATION CHECKS PASSED")

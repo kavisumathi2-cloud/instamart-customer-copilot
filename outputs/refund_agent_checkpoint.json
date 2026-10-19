@@ -1,7 +1,9 @@
 {
   "order_id": "ORD-110603",
-  "request_days": 8.0,
   "status": "rejected",
+  "final_answer": "Refund request must be raised within 7 days of delivery.",
   "steps": [],
-  "llm_calls": 0
+  "step_count": 0,
+  "llm_calls": 0,
+  "request_days": 8.0
 }

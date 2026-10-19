@@ -1,0 +1,6 @@
+{"run_id": "b2194f4c-702b-4db8-9e5c-2020d8ca311b", "scenario_id": "S1", "order_id": "ORD-100048", "refund_inr": 128.25, "status": "simulated_refund_issued", "real_money_transferred": false}
+{"run_id": "a3b09ec9-97dc-497b-92ce-923b2f3ef118", "scenario_id": "S2", "order_id": "ORD-100067", "refund_inr": 135.0, "status": "simulated_refund_issued", "real_money_transferred": false}
+{"run_id": "ca29610e-d695-4450-bee3-186a03a72e28", "scenario_id": "S1", "order_id": "ORD-100048", "refund_inr": 128.25, "status": "simulated_refund_issued", "real_money_transferred": false}
+{"run_id": "41567ff2-1e28-47c6-94cd-8139a1701d3e", "scenario_id": "S2", "order_id": "ORD-100067", "refund_inr": 135.0, "status": "simulated_refund_issued", "real_money_transferred": false}
+{"run_id": "77989a92-1e79-4df1-8daf-cc520959c76b", "scenario_id": "S1", "order_id": "ORD-100048", "refund_inr": 128.25, "status": "simulated_refund_issued", "real_money_transferred": false}
+{"run_id": "fdbefc22-356f-46d4-8686-c32b93825b6b", "scenario_id": "S2", "order_id": "ORD-100067", "refund_inr": 135.0, "status": "simulated_refund_issued", "real_money_transferred": false}

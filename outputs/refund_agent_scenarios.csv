@@ -1,0 +1,8 @@
+scenario_id,expected_outcome,actual_outcome,outcome_match,expected_refund_inr,actual_refund_inr,refund_match,run_id,status,llm_calls
+S1,REFUND,REFUND,True,128.25,128.25,True,77989a92-1e79-4df1-8daf-cc520959c76b,REFUND,5
+S2,REFUND,REFUND,True,135.0,135.0,True,fdbefc22-356f-46d4-8686-c32b93825b6b,REFUND,5
+S3,ESCALATE,ESCALATE,True,1999.0,1999.0,True,1db06c72-4244-4f2a-9f68-eb718236a402,ESCALATE,5
+S4,DENIED,DENIED,True,0.0,0.0,True,61dd200b-a2f0-471c-bc2b-43892a99a6b1,DENIED,4
+S5,DENIED,DENIED,True,0.0,0.0,True,aeda0aef-d381-4218-bf05-c1e5015aaeb5,DENIED,3
+S6,NOT_FOUND,NOT_FOUND,True,0.0,0.0,True,3b0481a2-df3c-4a5f-acf3-519590615fb9,NOT_FOUND,2
+S7,FALLBACK,FALLBACK,True,0.0,0.0,True,3b601184-c0eb-4996-85f5-7aaf0a542286,FALLBACK_MAX_ITERATIONS,6
