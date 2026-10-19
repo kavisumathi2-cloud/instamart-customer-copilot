@@ -1,39 +1,43 @@
 
--- Q1: Top 30 customers by completed order spending
+-- Q1: Completed orders over ₹500, customers with total spending above ₹8,000
 SELECT
     customer_id,
     ROUND(SUM(order_amount), 2) AS total_spending
 FROM orders
 WHERE status = 'completed'
+  AND order_amount > 500
 GROUP BY customer_id
-ORDER BY total_spending DESC
-LIMIT 30;
+HAVING SUM(order_amount) > 8000
+ORDER BY total_spending DESC;
 
 
--- Q2: Completed order amount by city and product category
+-- Q2: Completed order revenue by city and product category
 SELECT
     c.city,
     p.category,
     ROUND(SUM(o.order_amount), 2) AS total_amount
 FROM orders o
-JOIN customers c ON o.customer_id = c.customer_id
-JOIN products p ON o.product_id = p.product_id
+JOIN customers c
+    ON o.customer_id = c.customer_id
+JOIN products p
+    ON o.product_id = p.product_id
 WHERE o.status = 'completed'
 GROUP BY c.city, p.category
 ORDER BY c.city, p.category;
 
 
--- Q3: Top 11 products by completed sales amount
+-- Q3: Products priced above the average product price
 SELECT
-    p.product_id,
-    p.product_name,
-    ROUND(SUM(o.order_amount), 2) AS total_sales
-FROM orders o
-JOIN products p ON o.product_id = p.product_id
-WHERE o.status = 'completed'
-GROUP BY p.product_id, p.product_name
-ORDER BY total_sales DESC
-LIMIT 11;
+    product_id,
+    product_name,
+    category,
+    ROUND(price_inr, 2) AS price_inr
+FROM products
+WHERE price_inr > (
+    SELECT AVG(price_inr)
+    FROM products
+)
+ORDER BY price_inr DESC;
 
 
 -- Q4: Customers with no completed orders
@@ -47,7 +51,8 @@ WHERE o.order_id IS NULL
 ORDER BY c.customer_id;
 
 
--- Q5: Customers whose completed spending is above average
+-- Q5: Customers whose completed spending is above
+-- the average completed spending per customer
 SELECT
     customer_id,
     ROUND(SUM(order_amount), 2) AS completed_spending
@@ -61,7 +66,7 @@ HAVING SUM(order_amount) > (
         FROM orders
         WHERE status = 'completed'
         GROUP BY customer_id
-    )
+    ) AS customer_spending
 )
 ORDER BY completed_spending DESC;
 
@@ -73,7 +78,8 @@ WITH customer_city_spending AS (
         o.customer_id,
         SUM(o.order_amount) AS total_spending
     FROM orders o
-    JOIN customers c ON o.customer_id = c.customer_id
+    JOIN customers c
+        ON o.customer_id = c.customer_id
     WHERE o.status = 'completed'
     GROUP BY c.city, o.customer_id
 ),
@@ -103,7 +109,7 @@ WHERE spending_rank <> row_number_rank
 ORDER BY city, spending_rank, customer_id;
 
 
--- Q7: Daily completed spending and cumulative total
+-- Q7: Daily completed revenue and cumulative revenue
 WITH daily_spending AS (
     SELECT
         DATE(order_ts) AS order_date,
