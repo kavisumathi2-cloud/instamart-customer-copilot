@@ -389,12 +389,12 @@ PII redaction is performed before ticket processing. Redaction and output valida
 ### Part C Outputs
 
 - `outputs/tickets_redacted.csv`
-- `outputs/ticket_triage_results.csv`
-- `outputs/ticket_triage_summary.json`
 - `outputs/triage_results.csv`
+- `outputs/ticket_triage_summary.json`
 - `outputs/triage_budget_demo.csv`
 - `outputs/triage_confusion_zero_shot.csv`
 - `outputs/triage_few_shot.csv`
+- `outputs/triage_zero_shot.csv`
 
 ## Part D — Policy RAG Assistant and Refund Agent
 
