@@ -41,22 +41,6 @@ instamart-customer-copilot/
 │   └── instamart.db
 ├── models/
 ├── outputs/
-│   ├── customer_segments.csv
-│   ├── kmeans_scores.csv
-│   ├── lapse_model.joblib
-│   ├── retention_list.csv
-│   ├── tickets_redacted.csv
-│   ├── ticket_triage_results.csv
-│   ├── ticket_triage_summary.json
-│   ├── triage_results.csv
-│   ├── triage_budget_demo.csv
-│   ├── triage_confusion_zero_shot.csv
-│   ├── triage_few_shot.csv
-│   ├── policy_rag_results.csv
-│   ├── policy_rag_overlap_comparison.csv
-│   ├── policy_rag_summary.json
-│   ├── refund_agent_demo.json
-│   └── refund_agent_checkpoint.json
 ├── src/
 │   ├── build_database.py
 │   ├── check_database.py
@@ -77,21 +61,35 @@ instamart-customer-copilot/
 └── requirements.txt
 ```
 
-Note: This is the expected project structure. Actual files and folders may vary depending on which scripts have been run and which generated artifacts are committed.
+The `outputs/` directory contains generated datasets, model artifacts, evaluation results, and refund-agent demo files. The exact files may vary depending on which scripts have been run and which generated artifacts are committed.
 
-## Reproduce
+## Setup and Reproduction
 
 Run commands from the repository root using Python 3.11 or later. Install the dependencies listed in `requirements.txt` and activate the virtual environment before running the scripts.
 
-Example setup on Windows PowerShell:
+### Windows PowerShell
+
+Create a virtual environment:
 
 ```powershell
 python -m venv .venv
+```
+
+Activate it:
+
+```powershell
 .\.venv\Scripts\Activate.ps1
+```
+
+Install dependencies:
+
+```powershell
 pip install -r requirements.txt
 ```
 
-Run scripts in the order required by their input files:
+### Run the project
+
+Run the scripts in the order required by their input files:
 
 ```powershell
 python generate_data.py
@@ -108,7 +106,7 @@ python src/refund_agent.py
 python -m pytest -q
 ```
 
-Some scripts generate or overwrite files. Review the script configuration and output paths before rerunning the complete workflow.
+Some scripts generate or overwrite files. Review script configuration and output paths before rerunning the complete workflow.
 
 The provided `generate_data.py` and `mock_llm.py` files are used as project dependencies and should remain unmodified.
 
@@ -175,6 +173,8 @@ The latest documented segment counts are:
 
 These segments can support targeted promotions, customer engagement, and support prioritisation. Segment names describe the project's configured rules and should not be interpreted as universal customer categories.
 
+The segmentation workflow also evaluates K-Means clustering configurations using silhouette scores and uses PCA to examine feature variation in a lower-dimensional representation.
+
 ### Lapse Prediction
 
 A machine learning model predicts whether a customer may lapse based on historical customer behaviour and a defined prediction target.
@@ -194,7 +194,7 @@ These metrics describe a recorded evaluation run and may change when the data, f
 
 The project also generates a retention list to help prioritise customers predicted to be at risk of lapsing.
 
-**Evaluation limitation:** The lapse target uses a defined time window. Features must be restricted to information available before the prediction cutoff to avoid temporal leakage. Predictions are estimates, not guarantees that a customer will lapse.
+**Evaluation limitation:** The lapse target uses a defined time window. Features must be restricted to information available before the prediction cutoff to avoid temporal leakage. The retention list is an illustrative prioritisation output, not a guarantee of successful customer retention.
 
 ### Main Outputs
 
@@ -209,11 +209,21 @@ The project also generates a retention list to help prioritise customers predict
 
 The ticket triage component classifies support tickets into billing, delivery, fraud, and technical categories. It uses zero-shot and few-shot classification workflows, validates model outputs, and applies keyword fallback handling when required.
 
-Potentially sensitive information is redacted before ticket processing. The PII audit recorded 55 email addresses, 91 phone numbers, and 132 order IDs before redaction, with zero detected instances remaining after redaction.
+Potentially sensitive information is redacted before ticket processing.
+
+The recorded PII audit found the following before redaction:
+
+| PII type | Detected before redaction | Detected after redaction |
+|---|---:|---:|
+| Email addresses | 55 | 0 |
+| Phone numbers | 91 | 0 |
+| Order IDs | 132 | 0 |
+
+These results reflect the patterns checked by the implemented audit and do not guarantee that every possible sensitive value is detected.
 
 ### Classification Results
 
-The final few-shot run processed 164 tickets.
+The recorded final few-shot run processed 164 tickets.
 
 | Metric | Result |
 |---|---:|
@@ -228,7 +238,7 @@ The final few-shot run processed 164 tickets.
 | Tokens used | 22,660 |
 | Accuracy on valid classifications | 100% |
 
-Accuracy is calculated on the 147 valid classifications in the final few-shot run. It excludes tickets without a valid classification. The result applies to this synthetic dataset and evaluation configuration and is not a guarantee of real-world performance.
+Accuracy is calculated on the 147 valid classifications in the recorded final few-shot run. It excludes tickets without a valid classification. The result applies to this synthetic dataset and evaluation configuration and is not a guarantee of real-world performance.
 
 ### Token Budget Evaluation
 
@@ -283,11 +293,26 @@ The configured rules include:
 - Requests that fail eligibility checks are rejected or handled according to the workflow's guardrails.
 - Eligible requests within the automatic limit can proceed through the simulated refund workflow.
 
-The successful demonstration used order `ORD-110603`, with an order amount of ₹58, a delivery time of 70 minutes, and a request age of 3 days. The agent reported the status `simulated_refund_issued` after 4 steps and 4 LLM calls.
+### Successful Demo
 
-The result message was: `Simulated refund recorded. No real money was transferred.`
+The successful demonstration used the following details:
 
-This is a simulation only. It does not connect to a payment gateway or transfer real money. The checkpoint file records the workflow state for inspection and recovery.
+| Field | Result |
+|---|---|
+| Order ID | `ORD-110603` |
+| Order amount | ₹58.00 |
+| Actual delivery time | 70 minutes |
+| Request age | 3 days |
+| Agent status | `simulated_refund_issued` |
+| Workflow steps | 4 |
+| LLM calls | 5 |
+| Final answer | `REFUND: INR 58.0 issued.` |
+
+The agent reported a successful simulated refund because the demo order met the configured late-delivery, request-window, and automatic refund-limit conditions.
+
+**Safety boundary:** This is a simulation only. It does not connect to a payment gateway or transfer real money. The checkpoint file records workflow state for inspection and recovery.
+
+A request raised after the configured 7-day window can be rejected. For example, the same demo order was rejected when the request age was 8 days.
 
 ### Main Outputs
 
@@ -308,6 +333,8 @@ python -m pytest -q
 ```
 
 The latest previously recorded test result was **12 tests passed**. Rerun the test command after making changes to verify the current state.
+
+The recorded test suite covers refund-agent behaviour. Additional automated tests would be needed to comprehensively validate every component of the project.
 
 ## Limitations and Next Steps
 
