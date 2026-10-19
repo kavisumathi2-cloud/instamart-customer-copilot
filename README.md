@@ -202,7 +202,7 @@ Recency measures how long it has been since the most recent completed order. Fre
 
 ### K-Means Evaluation
 
-K-Means clustering was evaluated with silhouette scores for candidate values of \(k\).
+K-Means clustering was evaluated with silhouette scores for candidate values of `k`.
 
 | Number of clusters (k) | Silhouette score |
 |---:|---:|
@@ -422,11 +422,16 @@ The policies include late-delivery conditions, failed-payment handling, and esca
 
 The recorded comparison showed that retrieval quality depends on chunking and the number of retrieved chunks.
 
-- With 10-word overlap and top-3 retrieval, the retrieved information missed the 7-day request condition.
-- Increasing retrieval to top-5 retrieved the required conditions in that experiment.
-- With no overlap and top-3 retrieval, the recorded experiment retrieved all three required conditions.
+| Strategy | Top-K | All required conditions retrieved? |
+|---|---:|---|
+| 10-word overlap | 3 | No — the 7-day request condition was missed |
+| 10-word overlap | 5 | Yes |
+| 10-word overlap | 8 | Yes |
+| No overlap | 3 | Yes |
+| No overlap | 5 | Yes |
+| No overlap | 8 | Yes |
 
-This result shows that overlap alone does not guarantee better retrieval. Retrieved passages should be checked for relevance and completeness.
+In this experiment, increasing retrieval from top-3 to top-5 resolved the missing 7-day condition for the overlap strategy. The no-overlap strategy retrieved all three conditions even with top-3 retrieval. These results apply to the recorded test data and do not establish that one chunking strategy will always perform better than another.
 
 ### Refund Agent Guardrails
 
@@ -460,19 +465,19 @@ A separate check rejected the same demonstration order when the request age was 
 
 ### Seven-Scenario Evaluation
 
-All seven recorded scenarios matched their expected outcome and expected refund amount.
+All seven recorded scenarios matched their expected outcome and expected refund amount. The model-call and token counts below are matched to each scenario's run ID in `outputs/agent_runs.jsonl`.
 
-| Scenario | Expected outcome | Actual outcome | Expected refund (₹) | Actual refund (₹) | Match |
-|---|---|---|---:|---:|---|
-| S1 | REFUND | REFUND | 128.25 | 128.25 | Yes |
-| S2 | REFUND | REFUND | 135.00 | 135.00 | Yes |
-| S3 | ESCALATE | ESCALATE | 1,999.00 | 1,999.00 | Yes |
-| S4 | DENIED | DENIED | 0.00 | 0.00 | Yes |
-| S5 | DENIED | DENIED | 0.00 | 0.00 | Yes |
-| S6 | NOT_FOUND | NOT_FOUND | 0.00 | 0.00 | Yes |
-| S7 | FALLBACK | FALLBACK_MAX_ITERATIONS | 0.00 | 0.00 | Yes |
+| Scenario | Expected outcome | Actual outcome | Expected refund (₹) | Actual refund (₹) | Model calls | Tokens used | Match |
+|---|---|---|---:|---:|---:|---:|---|
+| S1 | REFUND | REFUND | 128.25 | 128.25 | 5 | 953 | Yes |
+| S2 | REFUND | REFUND | 135.00 | 135.00 | 5 | 953 | Yes |
+| S3 | ESCALATE | ESCALATE | 1,999.00 | 1,999.00 | 5 | 943 | Yes |
+| S4 | DENIED | DENIED | 0.00 | 0.00 | 4 | 661 | Yes |
+| S5 | DENIED | DENIED | 0.00 | 0.00 | 3 | 406 | Yes |
+| S6 | NOT_FOUND | NOT_FOUND | 0.00 | 0.00 | 2 | 154 | Yes |
+| S7 | FALLBACK | FALLBACK_MAX_ITERATIONS | 0.00 | 0.00 | 6 | 1,296 | Yes |
 
-The scenario results demonstrate the configured refund, escalation, denial, not-found, and fallback paths.
+The evaluation covers successful refunds, escalation for a refund above the automatic limit, denied requests, a missing order, and a maximum-iteration fallback. All refund amounts are simulated; no real money was transferred.
 
 ### Token and Timeout Guardrails
 
@@ -484,14 +489,22 @@ The recorded zero-second timeout test returned `FALLBACK_TIMEOUT` with zero LLM 
 
 A simulated crash-and-resume test used order `ORD-100048` and verified that the agent continued from its saved checkpoint.
 
-The tool sequence after recovery was:
+The tool sequence across the crash and resume was:
 
 1. `get_order`
 2. `search_policy`
 3. `calculate_refund`
 4. `issue_refund`
 
-The final status was `REFUND`, the final answer was `REFUND: INR 128.25 issued.`, and the refund amount matched the expected ₹128.25. The initial `get_order` call was not repeated after resuming from the checkpoint.
+The final status was `REFUND`, the final answer was `REFUND: INR 128.25 issued.`, and the refund amount matched the expected ₹128.25. The initial `get_order` call was not repeated after resuming from the checkpoint. The workflow demonstrated recovery without repeating the already completed tool execution.
+
+### ReAct Versus Plan-and-Execute
+
+The implemented agent uses a ReAct-style workflow: the model selects a tool, observes its result, and then decides what to do next. In the recorded scenarios, S1 used 5 model calls and 953 tokens, S5 used 3 calls and 406 tokens, and S6 used 2 calls and 154 tokens.
+
+A plan-and-execute design could ask the model to generate a complete tool plan once, execute the steps, and ask for a revised plan only when an unexpected result occurs. This could reduce model calls for straightforward requests, although the actual token savings would need to be measured in a separate implementation.
+
+ReAct can respond step by step to observations such as a missing order, a cancelled order, or a failed eligibility check. A fixed plan may require replanning when these observations differ from expectations. For this refund workflow, ReAct is useful because each tool result can inform the next action, while explicit policy checks and limits constrain the workflow. Neither design replaces deterministic validation, checkpointing, or safe handling of unexpected results.
 
 ### Part D Outputs
 
@@ -502,7 +515,7 @@ The final status was `REFUND`, the final answer was `REFUND: INR 128.25 issued.`
 - `outputs/refund_agent_scenarios.csv`
 - `outputs/agent_runs.jsonl`
 - `outputs/refund_ledger.jsonl`
-- Checkpoint files generated under `state/` or configured checkpoint paths
+- Checkpoint files under `state/`
 
 ### Safety Boundary
 
