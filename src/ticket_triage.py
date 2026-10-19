@@ -67,7 +67,8 @@ Output: {"category": "fraud", "reason": "Possible unauthorized access"}
 # --------------------------------------------------
 
 def redact_pii(text):
-    """Redact email, phone and order ID in the required order."""
+    """Redact email, phone and order ID before model processing."""
+
     if pd.isna(text):
         return ""
 
@@ -86,16 +87,18 @@ def redact_pii(text):
     )
 
     text = re.sub(
-        r"ORD-\d{6}",
+        r"\bORD-\d{6}\b",
         "[ORDER_ID]",
         text,
+        flags=re.IGNORECASE,
     )
 
     return text
 
 
 def count_pii(text):
-    """Count remaining occurrences of the required PII patterns."""
+    """Count occurrences of the PII patterns used by this project."""
+
     text = "" if pd.isna(text) else str(text)
 
     return {
@@ -106,7 +109,7 @@ def count_pii(text):
             re.findall(r"\b[6-9]\d{9}\b", text)
         ),
         "order_ids": len(
-            re.findall(r"ORD-\d{6}", text)
+            re.findall(r"\bORD-\d{6}\b", text, flags=re.IGNORECASE)
         ),
     }
 
@@ -141,7 +144,7 @@ def load_customer_segments():
 
     if segment_col is None:
         raise ValueError(
-            "customer_segments.csv must contain segment_name."
+            "customer_segments.csv must contain a segment column."
         )
 
     if "is_premium" not in df.columns:
@@ -175,10 +178,10 @@ def load_customer_segments():
 
 def parse_model_output(raw_text):
     """
-    Valid allowed-category JSON -> classified_json.
+    Valid JSON with an allowed category -> classified_json.
     Invalid JSON with exactly one allowed category keyword
     -> classified_keyword.
-    All other responses -> flagged_invalid_output.
+    Other outputs -> flagged_invalid_output.
     """
 
     try:
@@ -225,11 +228,7 @@ def parse_model_output(raw_text):
 # --------------------------------------------------
 
 def call_model_with_retry(system_prompt, user_text, ticket_id):
-    """
-    Call mock_llm.chat().
-    Retry transient failures up to three times.
-    Return response text and reported token usage.
-    """
+    """Call mock_llm with retries for transient errors."""
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -240,7 +239,6 @@ def call_model_with_retry(system_prompt, user_text, ticket_id):
         try:
             response = mock_llm.chat(messages)
 
-            # mock_llm returns a response object.
             raw_text = (
                 response.choices[0].message.content or ""
             )
@@ -275,7 +273,7 @@ def call_model_with_retry(system_prompt, user_text, ticket_id):
 # --------------------------------------------------
 
 def route_ticket(status, category, is_premium):
-    """Choose destination and priority using capstone rules."""
+    """Select ticket destination and priority."""
 
     human_review_statuses = {
         "skipped_empty",
@@ -301,48 +299,60 @@ def route_ticket(status, category, is_premium):
 # --------------------------------------------------
 
 def calculate_accuracy(results):
-    if "true_category" not in results.columns:
-        return None
+    """
+    Calculate accuracy only for rows with valid actual and
+    predicted categories. Empty/unknown labels are excluded.
+    """
 
-    evaluated = results[
-        results["true_category"].notna()
-        & results["category"].isin(ALLOWED_CATEGORIES)
-    ].copy()
-
-    if evaluated.empty:
+    if (
+        "true_category" not in results.columns
+        or "category" not in results.columns
+    ):
         return None
 
     actual = (
-        evaluated["true_category"]
+        results["true_category"]
+        .fillna("")
         .astype(str)
         .str.strip()
         .str.lower()
     )
 
     predicted = (
-        evaluated["category"]
+        results["category"]
+        .fillna("")
         .astype(str)
         .str.strip()
         .str.lower()
     )
 
-    return float((actual == predicted).mean())
+    valid_rows = (
+        actual.isin(ALLOWED_CATEGORIES)
+        & predicted.isin(ALLOWED_CATEGORIES)
+    )
+
+    if not valid_rows.any():
+        return None
+
+    return float(
+        (actual[valid_rows] == predicted[valid_rows]).mean()
+    )
 
 
 def make_confusion_matrix(results):
-    if "true_category" not in results.columns:
+    """Build a confusion matrix from valid labelled tickets."""
+
+    if (
+        "true_category" not in results.columns
+        or "category" not in results.columns
+    ):
         return {}
 
-    evaluated = results[
-        results["true_category"].notna()
-        & results["category"].isin(ALLOWED_CATEGORIES)
-    ].copy()
-
-    if evaluated.empty:
-        return {}
+    evaluated = results.copy()
 
     evaluated["actual"] = (
         evaluated["true_category"]
+        .fillna("")
         .astype(str)
         .str.strip()
         .str.lower()
@@ -350,6 +360,7 @@ def make_confusion_matrix(results):
 
     evaluated["predicted"] = (
         evaluated["category"]
+        .fillna("")
         .astype(str)
         .str.strip()
         .str.lower()
@@ -357,6 +368,7 @@ def make_confusion_matrix(results):
 
     evaluated = evaluated[
         evaluated["actual"].isin(ALLOWED_CATEGORIES)
+        & evaluated["predicted"].isin(ALLOWED_CATEGORIES)
     ]
 
     if evaluated.empty:
@@ -399,7 +411,7 @@ def run_triage(
         customer_id = ticket.get("customer_id", "")
         original_text = ticket.get("text", "")
 
-        # Redact before any model call.
+        # Redact sensitive information before model processing.
         redacted_text = redact_pii(original_text)
         pii_remaining = count_pii(redacted_text)
 
@@ -419,7 +431,7 @@ def run_triage(
         status = ""
         tokens_used = 0
 
-        # Guardrail 1: empty or whitespace-only ticket.
+        # Guardrail 1: skip empty tickets.
         if not redacted_text.strip():
             status = "skipped_empty"
 
@@ -428,19 +440,18 @@ def run_triage(
                 redacted_text
             )
 
-            # Guardrail 2: long ticket.
+            # Guardrail 2: send overly long tickets for review.
             if estimated_ticket_tokens > LONG_TICKET_TOKEN_LIMIT:
                 status = "flagged_long"
 
             else:
-                # Estimate tokens before calling the model.
                 estimated_call_tokens = (
                     mock_llm.est_tokens(system_prompt)
                     + estimated_ticket_tokens
                 )
 
-                # Guardrail 3: don't begin a call if the
-                # estimated prompt itself reaches the budget.
+                # Guardrail 3: don't start a call if the estimated
+                # prompt reaches or exceeds the remaining budget.
                 if (
                     token_budget is not None
                     and total_tokens + estimated_call_tokens
@@ -576,7 +587,7 @@ def main():
 
     segments = load_customer_segments()
 
-    # Audit the raw PII counts and confirm that redaction removes them.
+    # PII audit: count patterns before and after redaction.
     pii_before = {
         "emails": 0,
         "phones": 0,
@@ -603,7 +614,7 @@ def main():
         "total_substitutions": sum(pii_before.values()),
     }
 
-    # Run 1: zero-shot without budget.
+    # Run 1: zero-shot classification.
     mock_llm.reset()
 
     zero_results, zero_summary = run_triage(
@@ -633,7 +644,7 @@ def main():
             OUTPUT_DIR / "triage_confusion_zero_shot.csv"
         )
 
-    # Run 2: few-shot without budget.
+    # Run 2: few-shot classification.
     mock_llm.reset()
 
     few_results, few_summary = run_triage(
@@ -648,7 +659,7 @@ def main():
         index=False,
     )
 
-    # Run 3: budget demo; try 6000, then 5000 if needed.
+    # Run 3: token-budget guardrail demo.
     budget = 6000
 
     mock_llm.reset()
@@ -681,7 +692,7 @@ def main():
         index=False,
     )
 
-    # Run 4: final few-shot run with a large budget.
+    # Run 4: final few-shot classification with a large budget.
     mock_llm.reset()
 
     final_results, final_summary = run_triage(
@@ -708,6 +719,7 @@ def main():
         index=False,
     )
 
+    # Redacted text and PII audit columns only.
     final_results[
         [
             "ticket_id",
@@ -746,6 +758,9 @@ def main():
 
     print("\nSaved outputs:")
     print(OUTPUT_DIR / "triage_results.csv")
+    print(OUTPUT_DIR / "tickets_redacted.csv")
+    print(OUTPUT_DIR / "triage_zero_shot.csv")
+    print(OUTPUT_DIR / "triage_few_shot.csv")
     print(OUTPUT_DIR / "triage_budget_demo.csv")
     print(OUTPUT_DIR / "triage_confusion_zero_shot.csv")
     print(OUTPUT_DIR / "ticket_triage_summary.json")
