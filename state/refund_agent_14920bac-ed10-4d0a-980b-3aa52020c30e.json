@@ -1,0 +1,56 @@
+{
+  "run_id": "14920bac-ed10-4d0a-980b-3aa52020c30e",
+  "scenario_id": "S6",
+  "user_message": "Refund for order ORD-999999 please.",
+  "order_id": "ORD-999999",
+  "request_days": 3,
+  "max_iterations": 6,
+  "token_limit": 6000,
+  "time_limit_seconds": 10.0,
+  "messages": [
+    {
+      "role": "system",
+      "content": "AGENT: You are an Instamart refund support agent. Verify orders and policies. Only completed orders qualify. Late-delivery refunds require delivery over 45 minutes. Requests must be raised within 7 days. Refunds above INR 1000 require human approval. All refunds are simulated."
+    },
+    {
+      "role": "user",
+      "content": "Refund for order ORD-999999 please."
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "call_1",
+          "name": "get_order",
+          "arguments": "{\"order_id\": \"ORD-999999\"}"
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "name": "get_order",
+      "content": "{\"error\": \"Order not found.\"}"
+    }
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "action": "get_order",
+      "arguments": {
+        "order_id": "ORD-999999"
+      },
+      "observation": {
+        "error": "Order not found."
+      }
+    }
+  ],
+  "llm_calls": 2,
+  "tokens_used": 154,
+  "iterations": 2,
+  "status": "NOT_FOUND",
+  "final_answer": "NOT_FOUND: no such order.",
+  "ledger_recorded": false,
+  "run_logged": true,
+  "checkpoint_path": "C:\\Users\\acer\\instamart-github-copy\\instamart-customer-copilot\\state\\refund_agent_14920bac-ed10-4d0a-980b-3aa52020c30e.json"
+}
