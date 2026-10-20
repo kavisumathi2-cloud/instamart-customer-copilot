@@ -84,11 +84,13 @@ python src/clean_data.py
 python src/build_database.py
 ```
 
-### Step 7 — Run SQL analysis
+### Step 7 — Validate SQL queries
 
 ```powershell
-python src/sql_analysis.py
+python check_sql_queries.py
 ```
+
+The SQL queries are documented in `sql/queries.sql`.
 
 ### Step 8 — Create customer features
 
@@ -143,7 +145,7 @@ Run the automated tests from the repository root:
 python -m pytest -v
 ```
 
-**Last verified test result:** 14 tests passed.
+**Last verified test result: 14 tests passed.**
 
 The automated tests validate selected project functionality and expected behaviours. Passing tests do not guarantee that every possible input or production failure has been covered.
 
@@ -207,7 +209,7 @@ Recorded gender counts:
 | Unknown | 30 |
 | **Total** | **1,200** |
 
-The cleaned customer data contains no missing ages, and the cleaned age range is 18–60.
+The cleaned customer data contains no missing ages, and the recorded cleaned age range is 18–60.
 
 ### 3.3 Order cleaning
 
@@ -284,7 +286,7 @@ The SQL validation script reported all seven queries passing.
 
 `RANK()` and `ROW_NUMBER()` can differ when values are tied. `RANK()` gives equal ranks to tied values, whereas `ROW_NUMBER()` assigns a distinct sequence number to each row.
 
-The city/category revenue totals and customer spending summaries provide cross-checks between the SQL and pandas calculations.
+The city/category revenue totals and customer spending summaries provide cross-checks between SQL and pandas calculations.
 
 ### 3.6 Order statistics and exploratory analysis
 
