@@ -22,31 +22,51 @@ All customer, product, order, ticket, and policy-evaluation data are synthetic. 
 - Python packages listed in `requirements.txt`
 - Git and GitHub for repository version control
 
-### Setup
+### Setup and execution
 
-Clone or download this repository, then open a terminal in the project root.
+Clone or download the repository and open a terminal in the project root.
 
-Create and activate a virtual environment on Windows PowerShell:
+The following commands use Windows PowerShell.
+
+**Step 1 — Create a virtual environment**
 
 ```powershell
 python -m venv .venv
+```
+
+**Step 2 — Activate the virtual environment**
+
+```powershell
 .\.venv\Scripts\Activate.ps1
 ```
 
-Install dependencies:
+**Step 3 — Install dependencies**
 
 ```powershell
 python -m pip install -r requirements.txt
 ```
 
-### Generate and prepare the data
-
-Run the data-generation and cleaning scripts in the order supported by the repository:
+**Step 4 — Generate the synthetic data**
 
 ```powershell
 python generate_data.py
+```
+
+**Step 5 — Clean the data**
+
+```powershell
 python src/clean_data.py
+```
+
+**Step 6 — Build the SQLite database**
+
+```powershell
 python src/build_database.py
+```
+
+**Step 7 — Validate the database**
+
+```powershell
 python src/check_database.py
 ```
 
@@ -56,28 +76,63 @@ The validation script should finish with:
 ALL CHECKPOINTS PASSED
 ```
 
-### Run the analysis and models
-
-Run the project scripts from the repository root:
+**Step 8 — Inspect the cleaned data**
 
 ```powershell
 python src/inspect_data.py
+```
+
+**Step 9 — Run SQL analysis**
+
+```powershell
 python src/sql_analysis.py
+```
+
+**Step 10 — Generate customer features**
+
+```powershell
 python src/customer_features.py
+```
+
+**Step 11 — Run customer segmentation**
+
+```powershell
 python src/customer_segmentation.py
+```
+
+**Step 12 — Run lapse prediction**
+
+```powershell
 python src/lapse_prediction.py
+```
+
+**Step 13 — Run ticket triage**
+
+```powershell
 python src/ticket_triage.py
+```
+
+**Step 14 — Run policy retrieval evaluation**
+
+```powershell
 python src/policy_rag.py
+```
+
+**Step 15 — Run the simulated refund agent**
+
+```powershell
 python src/refund_agent.py
 ```
 
-Run automated tests:
+**Step 16 — Run automated tests**
 
 ```powershell
-python -m pytest
+python -m pytest -v
 ```
 
 The project was previously tested with 14 passing tests. Run the tests again after a fresh clone to verify the current repository state.
+
+**Important:** Run the commands from the repository root and in the order shown. Some scripts generate or overwrite output files and agent checkpoint artifacts.
 
 ### Main generated artifacts
 
@@ -86,6 +141,8 @@ Important generated files include:
 - `data/clean/customers.csv`
 - `data/clean/products.csv`
 - `data/clean/orders.csv`
+- `data/clean/tickets.csv`
+- `data/clean/customer_features.csv`
 - `data/instamart.db`
 - `outputs/customer_segments.csv`
 - `outputs/kmeans_scores.csv`
@@ -114,11 +171,11 @@ The `state/` directory stores agent checkpoint files used for resuming interrupt
 
 The project uses synthetic customer, product, order, ticket, agent-scenario, and policy-evaluation data.
 
-The original data-generation and mock-LLM scripts are used without modification.
+The original `generate_data.py` and `mock_llm.py` scripts are used without modification.
 
 The raw orders dataset initially contained 13,084 rows. Cleaning removed 119 exact duplicate rows and retained the latest order record for each order ID, producing 12,309 cleaned orders.
 
-The cleaned dataset contains:
+The cleaned datasets contain:
 
 | Dataset | Rows |
 |---|---:|
@@ -145,7 +202,8 @@ Order cleaning includes:
 - Filling missing amounts using product price, quantity, and discount information where applicable.
 - Treating negative delivery times as missing.
 - Imputing missing delivery times for completed orders using product-category medians.
-- Keeping delivery time missing for cancelled orders and removing pending orders from the cleaned analytical dataset.
+- Keeping delivery time missing for cancelled orders.
+- Removing pending orders from the cleaned analytical dataset.
 
 ### Cleaned data results
 
@@ -161,13 +219,30 @@ The cleaned orders contain 11,110 completed orders and 1,199 cancelled orders.
 | Cancelled orders with missing delivery time | 1,199 |
 | Completed-order revenue | ₹2,998,668.80 |
 
-Customer city counts are Pune 227, Delhi 210, Bengaluru 197, Chennai 191, Hyderabad 191, and Mumbai 184.
+Customer city counts are:
 
-The cleaned gender counts are female 610, male 560, and unknown 30.
+| City | Customers |
+|---|---:|
+| Pune | 227 |
+| Delhi | 210 |
+| Bengaluru | 197 |
+| Chennai | 191 |
+| Hyderabad | 191 |
+| Mumbai | 184 |
+
+The cleaned gender counts are:
+
+| Gender | Customers |
+|---|---:|
+| Female | 610 |
+| Male | 560 |
+| Unknown | 30 |
 
 ### SQLite database
 
-The project builds `data/instamart.db` with customer, product, and order tables. The validation script checks the expected row counts, identifier uniqueness, valid order statuses, missing customer identifiers, and negative order amounts.
+The project builds `data/instamart.db` with customer, product, and order tables.
+
+The database validation script checks expected row counts, identifier uniqueness, valid order statuses, missing customer identifiers, and negative order amounts.
 
 The validation output ends with `ALL CHECKPOINTS PASSED`.
 
@@ -246,7 +321,7 @@ The generated `outputs/customer_segments.csv` includes customer ID, recency, fre
 
 The lapse model uses a cutoff of 1 September 2025. The label window covers September 2025. A customer is labelled lapsed when they have no completed orders during the label window and belong to the eligible historical cohort.
 
-The lapse cohort contains 1,156 customers:
+The lapse cohort contains 1,156 customers.
 
 | Label | Customers |
 |---|---:|
@@ -417,7 +492,7 @@ TF-IDF emphasizes terms that are frequent within a document but relatively disti
 The evaluation contains 12 answerable questions and two questions that cannot be answered from the policy documents.
 
 | Evaluation | Result |
-|---|---:|
+|---|---|
 | Answerable questions passed | 12/12 |
 | Unanswerable questions correctly handled | 2/2 |
 | All evaluations passed | True |
@@ -434,7 +509,7 @@ The fallback avoids inventing a policy answer when the indexed documents do not 
 
 The project compares retrieval using 10-word overlap with retrieval using no overlap. The comparison tests 12 answerable questions at top-K values of 3, 5, and 8.
 
-At top-K 3, both strategies retrieved the expected document and expected fact for 11 of 12 questions. Without overlap, the failed-payment refund question did not retrieve the expected document or the expected `48 hours` fact.
+At top-K 3, both strategies retrieved the expected document and expected fact for 11 of 12 questions. Without overlap, the failed-payment refund question did not retrieve the expected document or the expected 48 hours fact.
 
 At top-K 5, the expected payment document was retrieved, but the expected fact was still absent from the retrieved context. This demonstrates that retrieving a relevant document does not necessarily mean the required answer is present in the selected chunks.
 
@@ -464,8 +539,8 @@ The logged agent scenarios include the following expected outcomes:
 
 | Scenario | Expected result |
 |---|---|
-| S1 — Eligible late-delivery refund | `REFUND: INR 128.25 issued.` |
-| S2 — Eligible refund | `REFUND: INR 135.0 issued.` |
+| S1 — Eligible late-delivery refund | `REFUND: INR 128.25 issued` |
+| S2 — Eligible refund | `REFUND: INR 135.0 issued` |
 | S3 — Refund above automatic approval limit | `ESCALATE` |
 | S4 — Delivery within 45 minutes | `DENIED` |
 | S5 — Order not completed | `DENIED` |
@@ -485,7 +560,9 @@ The agent saves checkpoint state under `state/` and writes demo checkpoint artif
 
 The crash/resume demonstration verifies a completed S1 refund result of ₹128.25 and records the tool sequence:
 
-`get_order → search_policy → calculate_refund → issue_refund`
+```text
+get_order → search_policy → calculate_refund → issue_refund
+```
 
 The intended resume behavior is to restore the saved state and continue from the last completed tool observation instead of executing completed actions again. The tool sequence in the logged record is consistent with the expected workflow; confirming exactly-once execution also requires comparing tool executions across the crash and resumed portions of the run.
 
@@ -509,4 +586,5 @@ For this project, the tool-driven ReAct workflow supports conditional decisions 
 - Policy rules and refund limits are configured for this synthetic capstone and must not be treated as actual Instamart policy.
 - Refund issuance is simulated. No real payments are made.
 - Checkpoints and append-only logs may contain repeated records from multiple test runs; final submitted artifacts should be checked for consistency and reproducibility.
-- Before final submission, run the project from a fresh clone, rerun the tests, verify the generated outputs, and ensure the public GitHub repository contains the required source files and documentation.
+
+Before final submission, run the project from a fresh clone, rerun the tests, verify the generated outputs, and ensure the public GitHub repository contains the required source files and documentation.
