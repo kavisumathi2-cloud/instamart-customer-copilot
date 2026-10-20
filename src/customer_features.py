@@ -69,7 +69,7 @@ def main():
 
     features["recency"] = (
         snapshot - features["last_order_ts"]
-    ).dt.total_seconds() / 86400
+    ).dt.days
 
     # Customers without completed orders have no RFM recency.
     features["frequency"] = features["completed_orders"]
