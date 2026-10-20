@@ -77,7 +77,7 @@ Run automated tests:
 python -m pytest
 ```
 
-The project was previously tested with **12 passing tests**. Run the tests again after a fresh clone to verify the current repository state.
+The project was previously tested with 14 passing tests. Run the tests again after a fresh clone to verify the current repository state.
 
 ### Main generated artifacts
 
