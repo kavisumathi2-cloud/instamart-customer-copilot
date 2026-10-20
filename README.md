@@ -137,13 +137,15 @@ python check_order_stats.py
 
 ### Step 15 — Run automated tests
 
+Run the automated tests from the repository root:
+
 ```powershell
 python -m pytest -v
 ```
 
-The scripts generate cleaned CSV files, a SQLite database, customer features, segmentation and lapse-prediction outputs, ticket-triage results, policy-retrieval evaluations, and refund-agent demonstration files.
+**Last verified test result:** 14 tests passed.
 
-Run the pipeline in the documented order when reproducing the results. Running the data generator again may overwrite generated datasets.
+The automated tests validate selected project functionality and expected behaviours. Passing tests do not guarantee that every possible input or production failure has been covered.
 
 ## 3. Part A — Data Foundation
 
