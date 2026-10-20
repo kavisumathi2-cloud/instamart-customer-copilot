@@ -1,11 +1,12 @@
-
 import unittest
+from unittest.mock import patch
 
 from src.refund_agent import (
     validate_request_days,
     calculate_refund,
     issue_refund,
     run_refund_agent,
+    resume_agent,
 )
 
 
@@ -95,6 +96,62 @@ class TestRefundSafetyRules(unittest.TestCase):
         self.assertEqual(result["llm_calls"], 0)
         self.assertEqual(result["steps"], [])
         self.assertEqual(result["step_count"], 0)
+
+
+class TestRefundAgentResume(unittest.TestCase):
+
+    @patch("src.refund_agent._continue_agent")
+    @patch("src.refund_agent.load_json")
+    def test_resume_completed_run_does_not_execute_tools_again(
+        self,
+        mock_load_json,
+        mock_continue_agent,
+    ):
+        completed_state = {
+            "run_id": "test-completed-run",
+            "scenario_id": "TEST_RESUME",
+            "order_id": "ORD-110603",
+            "status": "REFUND",
+            "final_answer": "REFUND: INR 58.0 issued.",
+            "steps": [
+                {
+                    "step": 1,
+                    "action": "issue_refund",
+                    "observation": {
+                        "success": True,
+                        "refund_inr": 58.0,
+                    },
+                }
+            ],
+            "llm_calls": 5,
+            "tokens_used": 950,
+        }
+
+        mock_load_json.return_value = completed_state
+
+        result = resume_agent("test-completed-run")
+
+        self.assertEqual(result["status"], "REFUND")
+        self.assertEqual(result["order_id"], "ORD-110603")
+        self.assertEqual(result["step_count"], 1)
+        self.assertEqual(result["llm_calls"], 5)
+
+        # A completed run should return its saved result.
+        mock_continue_agent.assert_not_called()
+
+    @patch("src.refund_agent.load_json")
+    def test_resume_missing_checkpoint_returns_error(
+        self,
+        mock_load_json,
+    ):
+        mock_load_json.return_value = None
+
+        result = resume_agent("missing-test-run")
+
+        self.assertEqual(result["status"], "ERROR")
+        self.assertIn("Checkpoint not found", result["final_answer"])
+        self.assertEqual(result["steps"], [])
+        self.assertEqual(result["llm_calls"], 0)
 
 
 if __name__ == "__main__":
