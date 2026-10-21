@@ -139,6 +139,52 @@ class TestRefundAgentResume(unittest.TestCase):
         # A completed run should return its saved result.
         mock_continue_agent.assert_not_called()
 
+    @patch("src.refund_agent._continue_agent")
+    @patch("src.refund_agent.load_json")
+    def test_resume_in_progress_checkpoint_continues_saved_state(
+        self,
+        mock_load_json,
+        mock_continue_agent,
+    ):
+        saved_state = {
+            "run_id": "test-in-progress-run",
+            "scenario_id": "TEST_RESUME",
+            "order_id": "ORD-100048",
+            "status": "in_progress",
+            "request_days": 3,
+            "steps": [
+                {
+                    "step": 1,
+                    "action": "get_order",
+                    "observation": {"success": True},
+                },
+                {
+                    "step": 2,
+                    "action": "search_policy",
+                    "observation": {"success": True},
+                },
+            ],
+            "llm_calls": 2,
+            "tokens_used": 300,
+        }
+
+        expected_result = {
+            "run_id": "test-in-progress-run",
+            "status": "REFUND",
+            "order_id": "ORD-100048",
+            "steps": saved_state["steps"],
+            "step_count": 2,
+            "llm_calls": 3,
+        }
+
+        mock_load_json.return_value = saved_state
+        mock_continue_agent.return_value = expected_result
+
+        result = resume_agent("test-in-progress-run")
+
+        mock_continue_agent.assert_called_once_with(saved_state)
+        self.assertEqual(result["status"], "REFUND")
+
     @patch("src.refund_agent.load_json")
     def test_resume_missing_checkpoint_returns_error(
         self,
