@@ -1,4 +1,4 @@
-# Instamart Customer Intelligence & Support Copilot
+﻿# Instamart Customer Intelligence & Support Copilot
 
 ## Overview
 
@@ -16,10 +16,10 @@ The project combines:
 
 The implementation is organised into four parts:
 
-- **Part A — Data Foundation:** Clean, validate, store, and analyse the source data.
-- **Part B — Customer Intelligence:** Segment customers and predict customer lapse.
-- **Part C — Support Ticket Triage:** Redact personal information, classify tickets, validate outputs, and enforce token-budget guardrails.
-- **Part D — Policy RAG and Refund Agent:** Retrieve policy information and demonstrate a guarded refund workflow.
+- **Part A â€” Data Foundation:** Clean, validate, store, and analyse the source data.
+- **Part B â€” Customer Intelligence:** Segment customers and predict customer lapse.
+- **Part C â€” Support Ticket Triage:** Redact personal information, classify tickets, validate outputs, and enforce token-budget guardrails.
+- **Part D â€” Policy RAG and Refund Agent:** Retrieve policy information and demonstrate a guarded refund workflow.
 
 **Important:** All project data is synthetic and fictional. The supplied `mock_llm.py` provides simulated language-model responses. Refund actions are demonstrations only; no real money is transferred.
 
@@ -57,7 +57,6 @@ instamart-customer-copilot/
 |   |-- lapse_prediction.py
 |   |-- policy_rag.py
 |   |-- refund_agent.py
-|   |-- refund_agent_backup.py
 |   |-- sql_analysis.py
 |   `-- ticket_triage.py
 |-- state/
@@ -77,19 +76,19 @@ Generated files may appear in `data/`, `outputs/`, and `state/` after running th
 
 Run the following commands from the repository root in Windows PowerShell.
 
-### Step 1 — Create a virtual environment
+### Step 1 â€” Create a virtual environment
 
 ```powershell
 python -m venv .venv
 ```
 
-### Step 2 — Activate the environment
+### Step 2 â€” Activate the environment
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
 ```
 
-### Step 3 — Install dependencies
+### Step 3 â€” Install dependencies
 
 ```powershell
 python -m pip install --upgrade pip
@@ -97,7 +96,7 @@ pip install -r requirements.txt
 pip install pytest
 ```
 
-### Step 4 — Generate synthetic data
+### Step 4 â€” Generate synthetic data
 
 ```powershell
 python generate_data.py
@@ -111,13 +110,13 @@ The original generator run reported:
 generated: customers=1200 products=40 orders_raw=13084 tickets=164
 ```
 
-### Step 5 — Clean the data
+### Step 5 â€” Clean the data
 
 ```powershell
 python src/clean_data.py
 ```
 
-### Step 6 — Build the SQLite database
+### Step 6 â€” Build the SQLite database
 
 ```powershell
 python src/build_database.py
@@ -129,49 +128,49 @@ The database is stored at:
 data/instamart.db
 ```
 
-### Step 7 — Run SQL analysis
+### Step 7 â€” Run SQL analysis
 
 ```powershell
 python src/sql_analysis.py
 ```
 
-### Step 8 — Create customer features
+### Step 8 â€” Create customer features
 
 ```powershell
 python src/customer_features.py
 ```
 
-### Step 9 — Run customer segmentation
+### Step 9 â€” Run customer segmentation
 
 ```powershell
 python src/customer_segmentation.py
 ```
 
-### Step 10 — Run lapse prediction
+### Step 10 â€” Run lapse prediction
 
 ```powershell
 python src/lapse_prediction.py
 ```
 
-### Step 11 — Run support ticket triage
+### Step 11 â€” Run support ticket triage
 
 ```powershell
 python src/ticket_triage.py
 ```
 
-### Step 12 — Run policy retrieval evaluation
+### Step 12 â€” Run policy retrieval evaluation
 
 ```powershell
 python src/policy_rag.py
 ```
 
-### Step 13 — Run the simulated refund agent
+### Step 13 â€” Run the simulated refund agent
 
 ```powershell
 python src/refund_agent.py
 ```
 
-### Step 14 — Run data, database, and SQL checks
+### Step 14 â€” Run data, database, and SQL checks
 
 ```powershell
 python check_clean_data.py
@@ -180,7 +179,7 @@ python check_sql_queries.py
 python check_order_stats.py
 ```
 
-### Step 15 — Run automated tests
+### Step 15 â€” Run automated tests
 
 ```powershell
 python -m pytest -v
@@ -190,7 +189,7 @@ The documented validation run completed with **14 tests passed**.
 
 Run the pipeline in the documented order when reproducing the results. Running the data generator again may overwrite generated datasets.
 
-## Part A — Data Foundation
+## Part A â€” Data Foundation
 
 ### 5.1 Raw Data Audit
 
@@ -210,7 +209,7 @@ Recorded raw-data findings:
 | Negative delivery times | 106 |
 | Blank delivery times | 2,541 |
 | Customers with blank ages | 61 |
-| Customer ages outside 10–100 | 6 |
+| Customer ages outside 10â€“100 | 6 |
 | Raw city spellings | 24 |
 | Nonblank raw gender spellings | 10 |
 | Blank gender values | 30 |
@@ -225,7 +224,7 @@ The cleaning rules include:
 
 - Standardise city names to six canonical cities.
 - Map gender values to `female`, `male`, or `unknown`.
-- Convert ages outside the allowed 10–100 range to missing values.
+- Convert ages outside the allowed 10â€“100 range to missing values.
 - Fill missing ages using the median age for the customer's city.
 - Parse signup dates as datetime values.
 
@@ -250,7 +249,7 @@ Recorded gender counts:
 | Unknown | 30 |
 | **Total** | **1,200** |
 
-The cleaned customer data contains no missing ages, and the recorded cleaned age range is 18–60.
+The cleaned customer data contains no missing ages, and the recorded cleaned age range is 18â€“60.
 
 ### 5.3 Order Cleaning
 
@@ -260,7 +259,7 @@ The order-cleaning workflow applies these rules:
 2. Remove 119 exact duplicate rows.
 3. Retain the latest record for each order ID.
 4. Convert order amounts to numeric values.
-5. Impute missing or unparseable amounts using product price × quantity × (1 − discount percentage).
+5. Impute missing or unparseable amounts using product price Ã— quantity Ã— (1 âˆ’ discount percentage).
 6. Convert negative delivery times to missing values.
 7. Impute missing delivery times for completed orders using the completed-order category median.
 8. Keep cancelled-order delivery times missing where no valid delivery time exists.
@@ -340,13 +339,13 @@ Recorded completed-order statistics:
 
 Using the Interquartile Range (IQR) method:
 
-- IQR = Q3 − Q1.
-- Upper fence = Q3 + 1.5 × IQR.
+- IQR = Q3 âˆ’ Q1.
+- Upper fence = Q3 + 1.5 Ã— IQR.
 - Completed orders above the upper fence are flagged as upper outliers.
 
 The mean being higher than the median and the positive skewness indicate that a relatively small number of large orders influence the average.
 
-The recorded strongest absolute correlation with order amount is the relationship with discount percentage, approximately −0.095. This is a weak negative association and does not prove that discounts cause lower spending.
+The recorded strongest absolute correlation with order amount is the relationship with discount percentage, approximately âˆ’0.095. This is a weak negative association and does not prove that discounts cause lower spending.
 
 ### Main Part A Outputs
 
@@ -357,7 +356,7 @@ The recorded strongest absolute correlation with order amount is the relationshi
 - `data/clean/customer_features.csv`
 - `sql/queries.sql`
 
-## Part B — Customer Segments & Lapse Prediction
+## Part B â€” Customer Segments & Lapse Prediction
 
 ### 6.1 RFM Feature Construction
 
@@ -555,7 +554,7 @@ Feature importance describes the fitted model's relative reliance on its input f
 | Feature | Coefficient |
 |---|---:|
 | Recency | +0.0392 |
-| Frequency | −1.6973 |
+| Frequency | âˆ’1.6973 |
 | Monetary value | +0.2834 |
 
 The coefficient signs describe associations with predicted lapse odds while holding the other model features constant. They should not be interpreted as causal effects.
@@ -575,7 +574,7 @@ The fitted model is saved to `outputs/lapse_model.joblib`. Reload verification c
 - `outputs/lapse_model.joblib`
 - `outputs/retention_list.csv`
 
-## Part C — Support Ticket Triage with Guardrails
+## Part C â€” Support Ticket Triage with Guardrails
 
 ### 7.1 Input Validation
 
@@ -635,7 +634,7 @@ The retry configuration uses a maximum of three retries and exponential backoff 
 The configured wait is:
 
 ```text
-0.05 × 2^n × uniform(0.9, 1.15)
+0.05 Ã— 2^n Ã— uniform(0.9, 1.15)
 ```
 
 The retry log records the ticket identifier, retry number, and wait duration. The recorded retry evaluation recovered 19 transient failures.
@@ -731,7 +730,7 @@ The following output files are produced by the relevant scripts when those runs 
 - `outputs/triage_confusion_zero_shot.csv`
 - `outputs/triage_budget_demo.csv`
 
-## Part D — Policy RAG Assistant & Refund Agent
+## Part D â€” Policy RAG Assistant & Refund Agent
 
 ### 8.1 Policy Documents and Chunking
 
