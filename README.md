@@ -1,6 +1,6 @@
-# Instamart Customer Intelligence & Support Copilot
+﻿# Instamart Customer Intelligence & Support Copilot
 
-## 1. Overview
+## Overview
 
 This project builds an end-to-end customer intelligence and support copilot using synthetic Instamart-style e-commerce data.
 
@@ -23,7 +23,7 @@ The implementation is organised into four parts:
 
 **Important:** All project data is synthetic and fictional. The supplied `mock_llm.py` provides simulated language-model responses. Refund actions are demonstrations only; no real money is transferred.
 
-## 2. Technologies Used
+### Technologies Used
 
 - Python 3.11+
 - SQLite 3.25+
@@ -35,45 +35,45 @@ The implementation is organised into four parts:
 
 The supplied `generate_data.py` and `mock_llm.py` files must remain unmodified.
 
-## 3. Repository Structure
+### Repository Structure
 
 ```text
 instamart-customer-copilot/
-├── data/
-│   ├── raw/
-│   ├── clean/
-│   ├── policies/
-│   └── instamart.db
-├── outputs/
-├── sql/
-│   └── queries.sql
-├── src/
-│   ├── build_database.py
-│   ├── check_database.py
-│   ├── clean_data.py
-│   ├── customer_features.py
-│   ├── customer_segmentation.py
-│   ├── inspect_data.py
-│   ├── lapse_prediction.py
-│   ├── policy_rag.py
-│   ├── refund_agent.py
-│   ├── refund_agent_backup.py
-│   ├── sql_analysis.py
-│   └── ticket_triage.py
-├── state/
-├── tests/
-├── check_clean_data.py
-├── check_order_stats.py
-├── check_sql_queries.py
-├── generate_data.py
-├── mock_llm.py
-├── requirements.txt
-└── README.md
+â”œâ”€â”€ data/
+â”‚   â”œâ”€â”€ raw/
+â”‚   â”œâ”€â”€ clean/
+â”‚   â”œâ”€â”€ policies/
+â”‚   â””â”€â”€ instamart.db
+â”œâ”€â”€ outputs/
+â”œâ”€â”€ sql/
+â”‚   â””â”€â”€ queries.sql
+â”œâ”€â”€ src/
+â”‚   â”œâ”€â”€ build_database.py
+â”‚   â”œâ”€â”€ check_database.py
+â”‚   â”œâ”€â”€ clean_data.py
+â”‚   â”œâ”€â”€ customer_features.py
+â”‚   â”œâ”€â”€ customer_segmentation.py
+â”‚   â”œâ”€â”€ inspect_data.py
+â”‚   â”œâ”€â”€ lapse_prediction.py
+â”‚   â”œâ”€â”€ policy_rag.py
+â”‚   â”œâ”€â”€ refund_agent.py
+â”‚   â”œâ”€â”€ refund_agent_backup.py
+â”‚   â”œâ”€â”€ sql_analysis.py
+â”‚   â””â”€â”€ ticket_triage.py
+â”œâ”€â”€ state/
+â”œâ”€â”€ tests/
+â”œâ”€â”€ check_clean_data.py
+â”œâ”€â”€ check_order_stats.py
+â”œâ”€â”€ check_sql_queries.py
+â”œâ”€â”€ generate_data.py
+â”œâ”€â”€ mock_llm.py
+â”œâ”€â”€ requirements.txt
+â””â”€â”€ README.md
 ```
 
 Generated files may appear in `data/`, `outputs/`, and `state/` after running the project.
 
-## 4. How to Run the Project
+## Reproduce
 
 Run the following commands from the repository root in Windows PowerShell.
 
@@ -190,7 +190,7 @@ The documented validation run completed with **14 tests passed**.
 
 Run the pipeline in the documented order when reproducing the results. Running the data generator again may overwrite generated datasets.
 
-## 5. Part A — Data Foundation
+## Part A — Data Foundation
 
 ### 5.1 Raw Data Audit
 
@@ -357,7 +357,7 @@ The recorded strongest absolute correlation with order amount is the relationshi
 - `data/clean/customer_features.csv`
 - `sql/queries.sql`
 
-## 6. Part B — Customer Segmentation and Lapse Prediction
+## Part B — Customer Segments & Lapse Prediction
 
 ### 6.1 RFM Feature Construction
 
@@ -575,7 +575,7 @@ The fitted model is saved to `outputs/lapse_model.joblib`. Reload verification c
 - `outputs/lapse_model.joblib`
 - `outputs/retention_list.csv`
 
-## 7. Part C — Support Ticket Triage with Guardrails
+## Part C — Support Ticket Triage with Guardrails
 
 ### 7.1 Input Validation
 
@@ -711,10 +711,10 @@ The final ticket-routing workflow uses ticket classification, guardrail outcomes
 
 The intended routing rules are:
 
-- Guardrail-rejected or otherwise unsafe cases → `human_review`
-- Fraud → `security_team`, priority `HIGH`
-- Premium customer → `premium_desk`, priority `HIGH`
-- Other eligible tickets → `support_queue`, priority `NORMAL`
+- Guardrail-rejected or otherwise unsafe cases â†’ `human_review`
+- Fraud â†’ `security_team`, priority `HIGH`
+- Premium customer â†’ `premium_desk`, priority `HIGH`
+- Other eligible tickets â†’ `support_queue`, priority `NORMAL`
 
 The guardrail checks take precedence over ordinary automated routing. Customers without a matching premium segment are not automatically treated as premium.
 
@@ -731,7 +731,7 @@ The following output files are produced by the relevant scripts when those runs 
 - `outputs/triage_confusion_zero_shot.csv`
 - `outputs/triage_budget_demo.csv`
 
-## 8. Part D — Policy RAG and Refund Agent
+## Part D — Policy RAG Assistant & Refund Agent
 
 ### 8.1 Policy Documents and Chunking
 
@@ -898,6 +898,13 @@ The recorded recovery examples completed with a REFUND outcome, four steps, five
 
 The saved state and execution logs provide evidence for the demonstrated recovery path. Aggregate counts alone do not prove exactly-once execution for every possible crash timing or external side effect.
 
+Tools recorded in the crash/resume execution:
+1. `get_order`
+2. `search_policy`
+3. `calculate_refund`
+4. `issue_refund`
+These tools appear in the saved `state/refund_agent_CRASH_RESUME_CHECK_001.json` execution evidence. Refund actions are simulated; no real money is transferred.
+
 ### 8.11 ReAct and Plan-and-Execute Considerations
 
 A ReAct-style agent interleaves tool calls and observations. This allows later decisions to use information returned by earlier tools, such as order status or policy eligibility.
@@ -929,7 +936,7 @@ The following output files are produced by the relevant scripts when those runs 
 
 Crash/resume state examples are stored under `state/`, not `outputs/`.
 
-## 9. Validation and Testing
+### Validation and Testing
 
 The project includes validation scripts for data quality, database integrity, SQL query results, order statistics, and automated tests.
 
@@ -952,7 +959,7 @@ The recorded validation results include:
 
 Results can vary if generated data, project code, configuration, or dependencies change.
 
-## 10. Limitations
+## Limitations and Next Steps
 
 - All datasets are synthetic and do not represent real Instamart customer data.
 - The supplied LLM is mocked; results may differ substantially from those of a live language model.
@@ -968,7 +975,7 @@ Results can vary if generated data, project code, configuration, or dependencies
 - Automated tests cover selected rules and scenarios, not every possible input or production failure.
 - A separate measured plan-and-execute comparison should not be claimed unless it has actually been run and recorded.
 
-## 11. Future Improvements
+### Future Improvements
 
 - Expand data-quality checks and automated tests.
 - Evaluate segmentation stability across different samples and random seeds.
@@ -980,8 +987,11 @@ Results can vary if generated data, project code, configuration, or dependencies
 - Strengthen refund-agent recovery, audit logging, and duplicate-action protection before any real integration.
 - Add authentication, authorisation, and human approval workflows before connecting to a production support system.
 
-## 12. Conclusion
+### Conclusion
 
 The Instamart Customer Intelligence & Support Copilot brings together data engineering, SQL analysis, machine learning, text retrieval, and a guarded agent workflow in one reproducible educational project.
 
 The repository demonstrates customer segmentation, lapse prediction, privacy-aware ticket triage, policy retrieval, and simulated refund decisions. Its results and safeguards are documented for learning and evaluation, not for production customer support or real financial transactions.
+
+
+
