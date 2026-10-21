@@ -1,4 +1,4 @@
-﻿# Instamart Customer Intelligence & Support Copilot
+# Instamart Customer Intelligence & Support Copilot
 
 ## Overview
 
@@ -39,36 +39,36 @@ The supplied `generate_data.py` and `mock_llm.py` files must remain unmodified.
 
 ```text
 instamart-customer-copilot/
-â”œâ”€â”€ data/
-â”‚   â”œâ”€â”€ raw/
-â”‚   â”œâ”€â”€ clean/
-â”‚   â”œâ”€â”€ policies/
-â”‚   â””â”€â”€ instamart.db
-â”œâ”€â”€ outputs/
-â”œâ”€â”€ sql/
-â”‚   â””â”€â”€ queries.sql
-â”œâ”€â”€ src/
-â”‚   â”œâ”€â”€ build_database.py
-â”‚   â”œâ”€â”€ check_database.py
-â”‚   â”œâ”€â”€ clean_data.py
-â”‚   â”œâ”€â”€ customer_features.py
-â”‚   â”œâ”€â”€ customer_segmentation.py
-â”‚   â”œâ”€â”€ inspect_data.py
-â”‚   â”œâ”€â”€ lapse_prediction.py
-â”‚   â”œâ”€â”€ policy_rag.py
-â”‚   â”œâ”€â”€ refund_agent.py
-â”‚   â”œâ”€â”€ refund_agent_backup.py
-â”‚   â”œâ”€â”€ sql_analysis.py
-â”‚   â””â”€â”€ ticket_triage.py
-â”œâ”€â”€ state/
-â”œâ”€â”€ tests/
-â”œâ”€â”€ check_clean_data.py
-â”œâ”€â”€ check_order_stats.py
-â”œâ”€â”€ check_sql_queries.py
-â”œâ”€â”€ generate_data.py
-â”œâ”€â”€ mock_llm.py
-â”œâ”€â”€ requirements.txt
-â””â”€â”€ README.md
+|-- data/
+|   |-- raw/
+|   |-- clean/
+|   |-- policies/
+|   `-- instamart.db
+|-- outputs/
+|-- sql/
+|   `-- queries.sql
+|-- src/
+|   |-- build_database.py
+|   |-- check_database.py
+|   |-- clean_data.py
+|   |-- customer_features.py
+|   |-- customer_segmentation.py
+|   |-- inspect_data.py
+|   |-- lapse_prediction.py
+|   |-- policy_rag.py
+|   |-- refund_agent.py
+|   |-- refund_agent_backup.py
+|   |-- sql_analysis.py
+|   `-- ticket_triage.py
+|-- state/
+|-- tests/
+|-- check_clean_data.py
+|-- check_order_stats.py
+|-- check_sql_queries.py
+|-- generate_data.py
+|-- mock_llm.py
+|-- requirements.txt
+`-- README.md
 ```
 
 Generated files may appear in `data/`, `outputs/`, and `state/` after running the project.
@@ -711,10 +711,10 @@ The final ticket-routing workflow uses ticket classification, guardrail outcomes
 
 The intended routing rules are:
 
-- Guardrail-rejected or otherwise unsafe cases â†’ `human_review`
-- Fraud â†’ `security_team`, priority `HIGH`
-- Premium customer â†’ `premium_desk`, priority `HIGH`
-- Other eligible tickets â†’ `support_queue`, priority `NORMAL`
+- Guardrail-rejected or otherwise unsafe cases -> `human_review`
+- Fraud -> `security_team`, priority `HIGH`
+- Premium customer -> `premium_desk`, priority `HIGH`
+- Other eligible tickets -> `support_queue`, priority `NORMAL`
 
 The guardrail checks take precedence over ordinary automated routing. Customers without a matching premium segment are not automatically treated as premium.
 
