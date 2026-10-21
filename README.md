@@ -2,30 +2,21 @@
 
 ## Overview
 
-This capstone project demonstrates an end-to-end customer intelligence and support workflow using fictional Instamart-style data.
+This project is an educational capstone that combines data engineering, SQL analytics, customer segmentation, lapse prediction, privacy-aware support ticket triage, policy retrieval, and a guarded refund-agent workflow.
 
-The project includes:
+The project uses synthetic Instamart-style data. It does not contain real customer data and does not issue real refunds.
 
-- Data cleaning, validation, and SQLite database creation
-- SQL analytics
-- Customer segmentation
-- Customer lapse prediction
-- Privacy-aware support ticket triage with guardrails
-- Policy retrieval using TF-IDF
-- A guarded refund-agent demonstration with simulated actions
+### Project objectives
 
-**Important:** All data is synthetic. The LLM is mocked, and refund actions are simulations only. No real money is transferred.
+- Build and validate a structured customer, product, and order database.
+- Clean and analyse order data using Python, pandas, and SQLite.
+- Create customer-level features and customer segments.
+- Train and evaluate a model to predict customer lapse.
+- Classify support tickets while applying privacy and token-budget controls.
+- Retrieve fictional policy information using TF-IDF.
+- Demonstrate a refund agent with validation, approval checks, execution limits, and checkpoint evidence.
 
-## Project Parts
-
-| Part | Description |
-|---|---|
-| Part A: Data Foundation | Clean and validate data, build SQLite tables, and run SQL analysis |
-| Part B: Customer Intelligence | Build customer features, segment customers, and predict lapse risk |
-| Part C: Support Ticket Triage | Redact personal information, classify tickets, and apply safety guardrails |
-| Part D: Policy RAG and Refund Agent | Retrieve policy information and demonstrate guarded refund decisions |
-
-## Technologies
+### Technology stack
 
 - Python 3.11+
 - SQLite 3.25+
@@ -33,59 +24,23 @@ The project includes:
 - NumPy
 - scikit-learn
 - joblib
-- pytest
+- Python standard library
+- pytest for automated testing
 
-The supplied `generate_data.py` and `mock_llm.py` files must remain unmodified.
+The project uses the provided `generate_data.py` and `mock_llm.py` files. These files must remain unmodified.
 
-## Repository Structure
+## Reproduce
 
-```text
-instamart-customer-copilot/
-|-- data/
-|   |-- raw/
-|   |-- clean/
-|   |-- policies/
-|   `-- instamart.db
-|-- outputs/
-|-- sql/
-|   `-- queries.sql
-|-- src/
-|   |-- build_database.py
-|   |-- check_database.py
-|   |-- clean_data.py
-|   |-- customer_features.py
-|   |-- customer_segmentation.py
-|   |-- inspect_data.py
-|   |-- lapse_prediction.py
-|   |-- policy_rag.py
-|   |-- refund_agent.py
-|   |-- sql_analysis.py
-|   `-- ticket_triage.py
-|-- state/
-|-- tests/
-|-- check_clean_data.py
-|-- check_order_stats.py
-|-- check_sql_queries.py
-|-- generate_data.py
-|-- mock_llm.py
-|-- requirements.txt
-`-- README.md
-```
+Run the following commands from the repository root in PowerShell.
 
-Generated files may be created in the `data`, `outputs`, and `state` folders when the scripts run.
-
-## Setup and Reproduction
-
-Run all commands from the repository root in Windows PowerShell.
-
-### 1. Create a virtual environment
+### 1. Create and activate a virtual environment
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 ```
 
-If PowerShell blocks activation, run:
+If PowerShell blocks activation, run this command in the same terminal and then activate the environment again:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
@@ -97,59 +52,107 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
 ```powershell
 python -m pip install --upgrade pip
 pip install -r requirements.txt
-pip install pytest
 ```
 
-### 3. Generate and prepare data
+### 3. Generate the synthetic data
 
 ```powershell
 python generate_data.py
-python src/clean_data.py
-python src/build_database.py
-python src/sql_analysis.py
-python src/customer_features.py
 ```
 
-The original generator run reported:
+The generator creates synthetic customers, products, orders, support tickets, policy documents, and evaluation data.
 
-```text
-generated: customers=1200 products=40 orders_raw=13084 tickets=164
-```
-
-Running the generator again may overwrite generated datasets.
-
-### 4. Run customer intelligence
+### 4. Clean and inspect the data
 
 ```powershell
+python src/inspect_data.py
+python src/clean_data.py
+```
+
+### 5. Build and validate the database
+
+```powershell
+python src/build_database.py
+python src/check_database.py
+```
+
+### 6. Run SQL analysis
+
+```powershell
+python src/sql_analysis.py
+```
+
+The SQL queries are documented in `sql/queries.sql`.
+
+### 7. Build customer features and segments
+
+```powershell
+python src/customer_features.py
 python src/customer_segmentation.py
+```
+
+### 8. Train and evaluate lapse prediction
+
+```powershell
 python src/lapse_prediction.py
 ```
 
-### 5. Run ticket triage and policy/refund workflows
+### 9. Run support ticket triage
 
 ```powershell
 python src/ticket_triage.py
-python src/policy_rag.py
-python src/refund_agent.py
 ```
 
-### 6. Run validation checks and tests
+### 10. Run policy retrieval evaluation
 
 ```powershell
-python check_clean_data.py
-python src/check_database.py
-python check_sql_queries.py
-python check_order_stats.py
-python -m pytest -v
+python src/policy_rag.py
 ```
 
-A recorded test run completed with **14 tests passed**. Results may change if code, data, configuration, or dependencies change.
+### 11. Run refund-agent demonstrations
+
+Follow the usage and demonstration instructions implemented in `src/refund_agent.py`. The agent uses synthetic order data and simulated refund actions.
+
+### 12. Run automated tests
+
+```powershell
+python -m pytest -q
+```
+
+Run commands from the repository root and execute them in order where one step generates inputs required by a later step. Generated outputs can change when scripts are rerun.
 
 ## Part A: Data Foundation
 
-The synthetic data generator creates customers, products, orders, tickets, policy-evaluation questions, and refund-agent scenarios.
+### Data generation
 
-Recorded cleaned-data counts:
+The project uses synthetic Instamart-style data to demonstrate a complete analytics workflow.
+
+The generated datasets include:
+
+- Customers
+- Products
+- Orders
+- Support tickets
+- Agent scenarios
+- Policy evaluation questions
+- Fictional policy documents
+
+The data generator originally reported:
+
+| Dataset | Generated rows |
+|---|---:|
+| Customers | 1,200 |
+| Products | 40 |
+| Raw orders | 13,084 |
+| Support tickets | 164 |
+
+These are generated-data reference counts. Later cleaning and database steps can produce different row counts in the cleaned order data.
+
+### Data cleaning
+
+The cleaning process standardises and validates the generated data, handles duplicates, and writes cleaned datasets for downstream processing.
+
+The cleaned dataset used in the latest local validation contained:
 
 | Dataset | Rows |
 |---|---:|
@@ -158,35 +161,48 @@ Recorded cleaned-data counts:
 | Orders | 12,309 |
 | Support tickets | 164 |
 
-The cleaned orders dataset contains 11,110 completed orders and 1,199 cancelled orders. Pending orders are excluded from the final cleaned orders dataset.
+The cleaned order dataset contains 12,309 distinct order records. In the recorded validation, the order statuses included 11,110 completed orders and 1,199 cancelled orders.
 
-The cleaning workflow includes timestamp parsing, duplicate handling, amount validation and imputation, delivery-time validation, customer-field standardisation, and removal of pending orders.
+### Database
 
-Database checks cover row counts, unique customer/product/order IDs, valid order statuses, customer references, missing customer IDs, and negative order amounts. The latest local validation reported **ALL CHECKPOINTS PASSED**.
+The project stores relational data in SQLite at `data/instamart.db`.
 
-The seven queries in `sql/queries.sql` demonstrate:
+The database workflow creates and loads the customers, products, and orders tables. Validation checks cover table availability, record counts, identifiers, order statuses, customer references, and numeric order values.
 
-- Customer order and spending summaries
-- Revenue by city and product category
-- Products priced above average
-- Customers without completed orders
-- Customers spending above average
-- Ranking with window functions
-- Daily and cumulative revenue
+### SQL analysis
+
+The SQL analysis demonstrates customer-level and order-level aggregations, including:
+
+- Order counts by customer
+- Total customer spending
+- Order counts by status
+- Revenue totals by status
+- Highest-spending customers
+- Customers with frequent orders
+
+The SQL statements are maintained in `sql/queries.sql`.
+
+### Part A outputs
+
+- `data/clean/customers.csv`
+- `data/clean/products.csv`
+- `data/clean/orders.csv`
+- `data/instamart.db`
+- `sql/queries.sql`
 
 ## Part B: Customer Segmentation and Lapse Prediction
 
+### Customer feature engineering
+
+The project builds customer-level features from order history, including order counts, completed orders, completed spending, and the latest recorded order timestamp.
+
+These features support customer segmentation and lapse prediction.
+
 ### Customer segmentation
 
-Customer features follow an RFM-style approach:
+The segmentation workflow groups customers according to their behavioural features and produces customer-level segment assignments.
 
-- **Recency:** Days since the last completed order
-- **Frequency:** Number of completed orders
-- **Monetary:** Total spending on completed orders
-
-The RFM snapshot date is 1 October 2025. Customers without completed orders are assigned a separate segment.
-
-Recorded segment distribution:
+The recorded segment distribution was:
 
 | Segment | Customers |
 |---|---:|
@@ -197,24 +213,35 @@ Recorded segment distribution:
 | No Completed Orders | 25 |
 | **Total** | **1,200** |
 
-K-means was evaluated for cluster counts from 2 to 8. In the recorded comparison, K=4 had the highest silhouette score of 0.525.
+The K-means evaluation recorded a silhouette score of approximately 0.525 for K=4. The final customer labels also include a separate group for customers with no completed orders.
+
+A premium-customer flag is used to identify selected high-value customers for support prioritisation. Segment names are descriptive labels for this synthetic dataset; they are not verified business classifications.
 
 ### Lapse prediction
 
-The lapse label identifies eligible customers with no completed order during September 2025. The feature cutoff is 1 September 2025. The recorded eligible cohort contains 1,156 customers.
+The lapse-prediction workflow constructs customer features and labels, trains candidate classification models, compares their performance, and saves the selected model and predictions.
 
-Recorded model comparison:
+The recorded modelling setup used:
 
-| Model | Accuracy | Lapsed Precision | Lapsed Recall | Lapsed F1 |
-|---|---:|---:|---:|---:|
-| Logistic Regression | 0.728 | 0.64 | 0.65 | 0.65 |
-| Random Forest | 0.737 | 0.66 | 0.65 | 0.66 |
+- A prediction cutoff of 1 September 2025
+- A September 2025 label window
+- Random state 42
+- Cross-validation F1 to select the candidate model
 
-Random Forest was selected based on cross-validation F1 in the recorded run. Preprocessing is fitted on the training split, and model features use historical data before the cutoff.
+The eligible cohort in the recorded evaluation contained 1,156 customers.
 
-**Evaluation caveat:** The retention list is illustrative, not a fully leakage-free evaluation, because the premium flag is derived from whole-window segmentation. Metrics apply to the supplied synthetic data and evaluation split.
+### Recorded model metrics
 
-Main outputs include:
+| Metric | Logistic Regression | Random Forest |
+|---|---:|---:|
+| Accuracy | 0.728 | 0.737 |
+| Lapsed-class precision | 0.64 | 0.66 |
+| Lapsed-class recall | 0.65 | 0.65 |
+| Lapsed-class F1 | 0.65 | 0.66 |
+
+Random Forest was selected based on the recorded cross-validation F1 comparison. Metrics depend on the synthetic dataset, label construction, feature processing, and evaluation split.
+
+### Part B outputs
 
 - `outputs/customer_segments.csv`
 - `outputs/kmeans_scores.csv`
@@ -223,30 +250,38 @@ Main outputs include:
 
 ## Part C: Support Ticket Triage with Guardrails
 
-The ticket pipeline processes 164 synthetic tickets and demonstrates:
+### Ticket preparation and privacy
 
-- Empty-text and long-input checks
-- Redaction of email addresses, phone numbers, and order IDs
-- Zero-shot and few-shot classification into `billing`, `delivery`, `fraud`, and `technical`
-- JSON output validation and keyword fallback
-- Retry handling for transient model errors
-- Token-budget controls
-- Customer-aware routing and human review for unsafe or rejected cases
+The ticket-triage workflow prepares support-ticket text and applies privacy-aware processing before classification. A redacted ticket dataset is produced for downstream evaluation.
 
-Recorded synthetic evaluation results:
+The goal is to demonstrate classification and safe handling of support text using synthetic examples, not to establish production readiness.
 
-| Metric | Zero-shot | Few-shot |
+### Classification approaches
+
+The project compares zero-shot and few-shot mock-LLM classification approaches. The evaluation records predicted categories and compares them with the synthetic ground-truth labels.
+
+In the recorded evaluation:
+
+| Measurement | Zero-shot | Few-shot |
 |---|---:|---:|
-| Classified tickets in comparison | 147 | 147 |
-| Accuracy | 85.7% | 100% |
-| Total tokens | 11,584 | 22,660 |
-| Tokens per classified ticket | 78.80 | 154.15 |
+| Classification accuracy | 85.7% | 100% |
+| Recorded token usage | 11,584 | 22,660 |
 
-The separate token-budget demonstration used a budget of 6,000 tokens and recorded 5,951 tokens across 80 model calls. These results apply to the mock model and synthetic tickets, not real support traffic.
+The recorded token-budget demonstration used a budget of 6,000 tokens and reported 5,951 tokens across 80 calls.
 
-Routing examples include human review for guardrail-rejected cases, high-priority security routing for fraud, high-priority routing for premium customers, and normal support routing for other eligible tickets.
+These results apply only to the evaluated synthetic tickets and mock-LLM behaviour. They should not be interpreted as evidence of equivalent performance with real customer tickets or a live language model.
 
-Main outputs include:
+### Guardrails
+
+The workflow demonstrates:
+
+- Redaction of selected sensitive text
+- Controlled classification categories
+- Comparison against known synthetic labels
+- Token-budget tracking
+- A budget demonstration for evaluating constrained execution
+
+### Part C outputs
 
 - `outputs/tickets_redacted.csv`
 - `outputs/ticket_triage_results.csv`
@@ -293,7 +328,47 @@ Safety controls include tool allowlisting, order-ID validation, order-status che
 
 **No real refund is issued.** The project does not connect to a payment gateway or live customer account. A production implementation would require stronger transactional guarantees, authentication, authorisation, durable auditing, and duplicate-action protection.
 
-Main outputs include:
+### Refund-agent scenario evaluation
+
+The seven recorded refund-agent scenarios matched their expected outcomes and refund amounts.
+
+| Scenario | Expected outcome | Actual outcome | Expected refund (INR) | Actual refund (INR) | Match |
+|---|---|---|---:|---:|---|
+| S1 | REFUND | REFUND | 128.25 | 128.25 | Yes |
+| S2 | REFUND | REFUND | 135.00 | 135.00 | Yes |
+| S3 | ESCALATE | ESCALATE | 1999.00 | 1999.00 | Yes |
+| S4 | DENIED | DENIED | 0.00 | 0.00 | Yes |
+| S5 | DENIED | DENIED | 0.00 | 0.00 | Yes |
+| S6 | NOT_FOUND | NOT_FOUND | 0.00 | 0.00 | Yes |
+| S7 | FALLBACK | FALLBACK | 0.00 | 0.00 | Yes |
+
+**Result:** 7 of 7 scenarios matched both the expected outcome and expected refund amount in the recorded scenario output.
+
+### Stop-safely demonstrations
+
+| Demonstration | Recorded status | Observed behaviour |
+|---|---|---|
+| Token-limit demonstration | `FALLBACK_TOKEN_LIMIT` | Stopped before the next LLM call when the token budget was exhausted. Recorded 2 steps, 2 LLM calls, and 196 tokens. |
+| Timeout demonstration | `FALLBACK_TIMEOUT` | Stopped safely with a zero time limit. Recorded 0 steps, 0 LLM calls, and 0 tokens. |
+
+These entries document the recorded safety demonstrations. They do not establish behaviour for every possible runtime failure.
+
+### Crash/resume checkpoint evidence
+
+The recorded checkpoint run for order `ORD-110603` completed with status `REFUND` and a simulated refund amount of INR 58.00. The recorded action sequence was:
+
+1. `get_order`
+2. `search_policy`
+3. `calculate_refund`
+4. `issue_refund`
+
+The run recorded four steps, five LLM calls, and 948 tokens. The checkpoint evidence is stored in `state/refund_agent_CRASH_RESUME_CHECK_001.json`; the corresponding run is recorded in `outputs/agent_runs.jsonl`.
+
+A second recorded checkpoint scenario, `CRASH_RESUME_S1_CHECK`, completed with status `REFUND` and a simulated refund amount of INR 128.25 for order `ORD-100048`. Its recorded action sequence was also `get_order`, `search_policy`, `calculate_refund`, and `issue_refund`.
+
+The logs document the recorded action sequence and checkpoint evidence. They should not, by themselves, be treated as proof of a complete process restart unless the restart-and-resume procedure was separately verified.
+
+### Part D outputs
 
 - `outputs/policy_rag_results.csv`
 - `outputs/policy_rag_summary.json`
@@ -303,21 +378,22 @@ Main outputs include:
 - `outputs/refund_agent_scenarios.csv`
 - `outputs/agent_runs.jsonl`
 - `outputs/refund_ledger.jsonl`
-
-Crash/resume evidence files are maintained separately in `state/`.
+- `state/` checkpoint files, including the named crash/resume evidence files
 
 ## Validation Summary
 
-Recorded validation checks include:
+The latest reported local validation included:
 
 - Cleaned-data validation passed
 - Database validation passed
 - SQL query checks passed
 - Automated test run: 14 tests passed
 
-Rerun the validation commands against the current checkout before submission if any project files have changed.
+Run the validation commands again against the current checkout before submission if project files have changed.
 
-## Limitations
+The recorded checks provide evidence for the tested data and workflows; they do not prove that every possible input or production failure has been tested.
+
+## Limitations and Next Steps
 
 - The datasets are synthetic and do not represent real Instamart customers.
 - The LLM is mocked; behaviour may differ from a live model.
@@ -328,9 +404,10 @@ Rerun the validation commands against the current checkout before submission if 
 - The RAG evaluation set is small and does not establish broad real-world reliability.
 - Refund actions are simulated; no payment transaction occurs.
 - Automated tests cover selected cases, not every possible production failure.
+- Before production use, the system would require stronger authentication, authorisation, monitoring, transactional controls, privacy reviews, and evaluation with appropriately governed real-world data.
 
 ## Conclusion
 
 This project combines data engineering, SQL, customer segmentation, lapse prediction, privacy-aware ticket triage, policy retrieval, and a guarded refund-agent workflow in one educational repository.
 
-It is intended for capstone evaluation and learning, not for production customer support or real financial transactions.
+The repository demonstrates how data validation, machine-learning evaluation, retrieval, deterministic business rules, and execution guardrails can work together in a synthetic customer-support setting.
