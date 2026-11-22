@@ -100,6 +100,8 @@ The raw orders dataset contains 13,084 rows. The following issues were identifie
 | Negative delivery times | 106 | 0.81% |
 | Blank delivery times | 2,541 | 19.42% |
 
+The 120 invalid amounts are counted across all 13,084 raw rows. The cleaning audit reports 112 because it counts invalid amounts only after the latest record per order ID is selected, so the two counts use different bases.
+
 Percentages use the total raw order-row count (13,084) as the denominator. Duplicate order-ID groups and extra repeated rows are different measures; exact duplicate rows are included within the repeated records and should not be added together.
 
 The raw customers dataset contains 1,200 rows. It has 61 blank ages (5.08%) and 6 ages outside the accepted 10–100 range (0.50%). City and gender values also contain inconsistent spellings and formats.
@@ -107,7 +109,7 @@ The raw customers dataset contains 1,200 rows. It has 61 blank ages (5.08%) and 
 #### Cleaning rules applied
 
 **Customers**
-- Convert `signup_date` to datetime; invalid dates are represented as missing values.
+- Convert signup_date to datetime during cleaning; invalid dates are represented as missing values. The date is stored in ISO format (YYYY-MM-DD) in the CSV and SQLite database.
 - Normalize city names by trimming whitespace, standardizing capitalization, and mapping known aliases. Distinct city spellings were reduced from 24 to 6, with 346 customer rows changed.
 - Normalize gender values into standard categories. Distinct gender spellings were reduced from 10 to 3, with 950 customer rows changed; missing or unrecognized values are represented as `unknown`.
 - Convert age to numeric, treat missing or out-of-range values as invalid, and impute using the city median followed by the overall median when needed. 67 age values required imputation.
