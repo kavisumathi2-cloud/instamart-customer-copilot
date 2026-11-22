@@ -172,5 +172,5 @@
   "final_answer": "REFUND: INR 58.0 issued.",
   "ledger_recorded": true,
   "run_logged": true,
-  "checkpoint_path": "C:\\Users\\acer\\instamart-github-copy\\instamart-customer-copilot\\state\\refund_agent_CRASH_RESUME_CHECK_001.json"
+  "checkpoint_path": "state\\refund_agent_CRASH_RESUME_CHECK_001.json"
 }

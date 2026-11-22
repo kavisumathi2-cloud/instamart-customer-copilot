@@ -92,5 +92,5 @@
   "llm_calls": 5,
   "tokens_used": 948,
   "request_days": 3,
-  "checkpoint_path": "C:\\Users\\acer\\instamart-github-copy\\instamart-customer-copilot\\state\\refund_agent_CRASH_RESUME_S1_CHECK.json"
+  "checkpoint_path": "state\\refund_agent_CRASH_RESUME_S1_CHECK.json"
 }
