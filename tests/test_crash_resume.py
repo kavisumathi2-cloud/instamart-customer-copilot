@@ -123,6 +123,20 @@ class TestCrashAndResume(unittest.TestCase):
                     if r.get("tool_name") == "issue_refund"
                 ]
                 self.assertEqual(len(refunds), 1)
+                refund = refunds[0]
+                self.assertEqual(
+                    refund["event_id"],
+                    f"{run_id}:issue_refund:ORD-110603",
+                )
+                self.assertEqual(refund["run_id"], run_id)
+                self.assertEqual(
+                    refund["scenario_id"],
+                    "CRASH_RESUME_TEST",
+                )
+                self.assertEqual(refund["order_id"], "ORD-110603")
+                self.assertTrue(refund.get("timestamp"))
+                self.assertFalse(refund["real_money_transferred"])
+                self.assertTrue(refund.get("status"))
 
 
 if __name__ == "__main__":
