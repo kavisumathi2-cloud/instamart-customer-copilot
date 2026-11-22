@@ -3,7 +3,7 @@
   "chunks_with_overlap": 15,
   "chunk_size_words": 40,
   "overlap_words": 10,
-  "top_k": 3,
+  "top_k": 5,
   "evaluation_questions": 14,
   "answerable_questions": 12,
   "answerable_questions_passed": 12,

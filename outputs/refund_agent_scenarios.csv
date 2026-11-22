@@ -1,8 +1,8 @@
-scenario_id,expected_outcome,actual_outcome,outcome_match,expected_refund_inr,actual_refund_inr,refund_match,run_id,status,llm_calls
-S1,REFUND,REFUND,True,128.25,128.25,True,0d27d8cb-4228-472e-b7e3-150e11e991d4,REFUND,5
-S2,REFUND,REFUND,True,135.0,135.0,True,8789f306-86db-43a4-aec2-d5862ab84f3c,REFUND,5
-S3,ESCALATE,ESCALATE,True,1999.0,1999.0,True,638a6813-9184-4701-bef7-74448a97fdfa,ESCALATE,5
-S4,DENIED,DENIED,True,0.0,0.0,True,b4b1d114-f1f2-47cc-8c2c-01b1396a9813,DENIED,4
-S5,DENIED,DENIED,True,0.0,0.0,True,ffbbe64d-f6da-4358-a77c-57afc01dd88f,DENIED,3
-S6,NOT_FOUND,NOT_FOUND,True,0.0,0.0,True,17ea7654-8297-4195-946f-a1b0898b3788,NOT_FOUND,2
-S7,FALLBACK,FALLBACK,True,0.0,0.0,True,691e4860-b8af-41c8-9cfe-503a1346f094,FALLBACK_MAX_ITERATIONS,6
+scenario_id,expected_outcome,actual_outcome,outcome_match,expected_refund_inr,actual_refund_inr,refund_match,expected_escalated_amount_inr,actual_escalated_amount_inr,escalation_match,ledger_match,run_id,status,llm_calls
+S1,REFUND,REFUND,True,128.25,128.25,True,0.0,0.0,True,True,a7dbc401-f72c-4f2d-a269-0c6af2fd61f4,REFUND,5
+S2,REFUND,REFUND,True,135.0,135.0,True,0.0,0.0,True,True,a8f015e6-4274-4a6f-a336-a36cb1117252,REFUND,5
+S3,ESCALATE,ESCALATE,True,0.0,0.0,True,1999.0,1999.0,True,True,5780f159-273d-475b-8ebd-5d7bcf532c55,ESCALATE,5
+S4,DENIED,DENIED,True,0.0,0.0,True,0.0,0.0,True,True,ae12bc8b-0858-4d0b-9f00-807d1c87fb7e,DENIED,4
+S5,DENIED,DENIED,True,0.0,0.0,True,0.0,0.0,True,True,3f470bd5-c1b0-4b61-b355-e646c7e38992,DENIED,3
+S6,NOT_FOUND,NOT_FOUND,True,0.0,0.0,True,0.0,0.0,True,True,867165e6-1bc6-4870-b051-115025ba2040,NOT_FOUND,2
+S7,FALLBACK,FALLBACK,True,0.0,0.0,True,0.0,0.0,True,True,e6c7d706-cd0c-47b6-88aa-f14f3901ed2a,FALLBACK,2

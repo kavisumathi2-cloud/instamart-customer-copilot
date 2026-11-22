@@ -1,0 +1,8 @@
+scenario_id,expected_outcome,react_outcome,plan_execute_outcome,react_outcome_match,plan_execute_outcome_match,expected_refund_inr,expected_escalated_amount_inr,react_refund_inr,plan_execute_refund_inr,react_refund_match,plan_execute_refund_match,react_escalated_amount_inr,plan_execute_escalated_amount_inr,react_escalation_match,plan_execute_escalation_match,react_model_calls,plan_execute_model_calls,react_tool_steps,plan_execute_tool_calls,plan_replans
+S1,REFUND,REFUND,REFUND,True,True,128.25,0.0,128.25,128.25,True,True,0.0,0.0,True,True,5,0,4,5,1
+S2,REFUND,REFUND,REFUND,True,True,135.0,0.0,135.0,135.0,True,True,0.0,0.0,True,True,5,0,4,5,1
+S3,ESCALATE,ESCALATE,ESCALATE,True,True,0.0,1999.0,0.0,0.0,True,True,1999.0,1999.0,True,True,5,0,4,5,1
+S4,DENIED,DENIED,DENIED,True,True,0.0,0.0,0.0,0.0,True,True,0.0,0.0,True,True,4,0,3,4,0
+S5,DENIED,DENIED,DENIED,True,True,0.0,0.0,0.0,0.0,True,True,0.0,0.0,True,True,3,0,2,1,1
+S6,NOT_FOUND,NOT_FOUND,NOT_FOUND,True,True,0.0,0.0,0.0,0.0,True,True,0.0,0.0,True,True,2,0,1,1,1
+S7,FALLBACK,FALLBACK,FALLBACK,True,True,0.0,0.0,0.0,0.0,True,True,0.0,0.0,True,True,2,0,1,1,1

@@ -1,0 +1,14 @@
+dataset,cleaning_rule,before_count,after_count,records_changed_or_removed,reason
+customers,Age validation and median imputation,67,0,67,"Invalid and missing ages are imputed using city median, then overall median."
+customers,Signup date conversion,0,0,0,Convert signup_date to datetime; invalid values become missing.
+customers,City name normalization,24,6,346,"Trim whitespace, standardize capitalization, and map known aliases."
+customers,Gender normalization,10,3,950,Normalize male/female variants; other or missing values become unknown.
+customers,Duplicate customer ID removal,0,0,0,Keep the last record for each customer ID.
+products,Duplicate product ID removal,0,0,0,Keep the last record for each product ID.
+orders,Keep latest record per order ID,775,0,775,Sort by order timestamp and retain the latest row per order ID.
+orders,Final status filtering,0,0,0,Retain only completed and cancelled latest records.
+orders,Invalid order amount handling,112,0,112,"Recover invalid amounts from product price, quantity and discount; remove unrecoverable amounts."
+orders,Completed delivery time handling,774,0,774,"Replace negative values with missing; impute using product-category median, then overall completed-order median."
+orders,Cancelled delivery time,1199,0,1199,Delivery duration is not applicable to cancelled orders.
+tickets,Exact duplicate row removal,0,0,0,Remove exact duplicate ticket rows.
+tickets,Missing ticket text handling,4,0,4,Replace missing ticket text with an empty string.

@@ -13,6 +13,11 @@ CLEAN.mkdir(parents=True, exist_ok=True)
 def clean_customers():
     df = pd.read_csv(RAW / "customers.csv")
 
+    # Convert signup_date to datetime.
+    df["signup_date"] = pd.to_datetime(
+        df["signup_date"], errors="coerce"
+    )
+
     # Normalize city names.
     df["city"] = (
         df["city"].astype("string").str.strip().str.title()

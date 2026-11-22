@@ -65,9 +65,13 @@ python generate_data.py
 
 ### 4. Inspect and clean the data
 
+Audit the raw data before cleaning, then inspect and clean the datasets.
+
 ```powershell
+python src/data_audit.py
 python src/inspect_data.py
 python src/clean_data.py
+python src/cleaning_audit.py
 ```
 
 ### 5. Build and validate the SQLite database
@@ -76,41 +80,181 @@ python src/clean_data.py
 python src/build_database.py
 python src/check_database.py
 ```
+#### Data Cleaning Rules and Audit Results
+
+The raw datasets are audited before cleaning. The cleaning audit compares the raw and cleaned datasets and records the changes made by each cleaning rule.
+
+#### Raw data audit
+
+The raw orders dataset contains 13,084 rows. The following issues were identified:
+
+| Audit item | Count | Percentage |
+|---|---:|---:|
+| Exact duplicate rows | 119 | 0.91% |
+| Duplicate order-ID groups | 772 | 5.90% |
+| Extra repeated order-ID rows | 775 | 5.92% |
+| Distinct order IDs | 12,309 | 94.08% |
+| Missing order IDs | 0 | 0.00% |
+| Pending order rows | 656 | 5.01% |
+| Non-numeric or missing order amounts | 120 | 0.92% |
+| Negative delivery times | 106 | 0.81% |
+| Blank delivery times | 2,541 | 19.42% |
+
+Percentages use the total raw order-row count (13,084) as the denominator. Duplicate order-ID groups and extra repeated rows are different measures; exact duplicate rows are included within the repeated records and should not be added together.
+
+The raw customers dataset contains 1,200 rows. It has 61 blank ages (5.08%) and 6 ages outside the accepted 10–100 range (0.50%). City and gender values also contain inconsistent spellings and formats.
+
+#### Cleaning rules applied
+
+**Customers**
+- Convert `signup_date` to datetime; invalid dates are represented as missing values.
+- Normalize city names by trimming whitespace, standardizing capitalization, and mapping known aliases. Distinct city spellings were reduced from 24 to 6, with 346 customer rows changed.
+- Normalize gender values into standard categories. Distinct gender spellings were reduced from 10 to 3, with 950 customer rows changed; missing or unrecognized values are represented as `unknown`.
+- Convert age to numeric, treat missing or out-of-range values as invalid, and impute using the city median followed by the overall median when needed. 67 age values required imputation.
+- Remove duplicate customer IDs while retaining the latest record.
+
+**Products**
+- Remove duplicate product IDs while retaining the latest record. No duplicate product IDs were found.
+
+**Orders**
+- Sort by order timestamp and retain the latest record for each order ID. This reduces 13,084 raw rows to 12,309 unique orders, removing 775 repeated order-ID rows.
+- Retain only completed and cancelled statuses among the latest records. The resulting dataset contains 11,110 completed orders and 1,199 cancelled orders. Although 656 pending rows occur in the raw order history, no pending status remains after selecting the latest record for each order ID.
+- Convert order amounts to numeric. Recover invalid or missing amounts using product price, quantity, and discount; remove unrecoverable amounts. After cleaning, no missing order amounts remain.
+- Replace negative completed-order delivery times with missing values. Impute missing completed delivery times using the product-category median, followed by the overall completed-order median. There were 669 missing and 105 negative completed delivery times before this handling; no missing completed delivery times remain afterward.
+- Set delivery time to missing for cancelled orders because a completed delivery duration does not apply to a cancelled order.
+
+**Tickets**
+- Remove exact duplicate ticket rows. No exact duplicates were found.
+- Replace missing ticket text with an empty string. Four missing text values were handled.
+
+#### Cleaning audit output
+
+Run the cleaning audit with:
+
+```powershell
+python src/cleaning_audit.py
+```
+
+The script saves `outputs/cleaning_rules_audit.csv`, which records the before-and-after counts, the number of records changed or removed, and the reason for each cleaning rule. For city and gender normalization, before-and-after counts represent distinct values, while `records_changed_or_removed` represents the actual number of customer rows whose values changed.
+
+The cleaned datasets contain 1,200 customers, 40 products, 12,309 orders, and 164 tickets. The audit distinguishes changes to field values from records removed; for example, cancelled orders remain in the dataset, but their delivery-time values are set to missing.
+
 
 ### 6. Run SQL analysis
 
 ```powershell
 python src/sql_analysis.py
+python src/run_sql_queries.py
+```
+#### SQL query results
+
+The SQL analysis includes filtering, aggregation, a three-table join, scalar and derived-table subqueries, a LEFT JOIN, CTEs, and window functions.
+
+| Query | Analysis | Result rows |
+|---|---|---:|
+| Q1 | Customers with completed orders above INR 500 per order and total qualifying spending above INR 8,000 | 30 |
+| Q2 | Completed revenue grouped by city and product category using a three-table join | 30 |
+| Q3 | Products priced above the average product price using a scalar subquery | 11 |
+| Q4 | Customers with no completed orders using a LEFT JOIN | 25 |
+| Q5 | Customers whose completed spending is above the average customer-level completed spending | 550 |
+| Q6 | Highest-spending customer in each city using ranking window functions | 6 |
+| Q7 | Daily completed revenue and cumulative revenue using a CTE and running-total window function | 183 |
+
+**Q6 — Window-function comparison**
+
+The query uses `RANK()`, `DENSE_RANK()`, and `ROW_NUMBER()` to compare ranking behaviour within each city. The highest-spending customer in each city receives rank 1.
+
+- `RANK()` assigns the same rank to tied values and skips subsequent rank numbers.
+- `DENSE_RANK()` assigns the same rank to tied values without skipping the next rank.
+- `ROW_NUMBER()` assigns a unique sequential number to each row. The customer ID is used as a secondary sort key to make the ordering deterministic.
+
+The executed query returned six top-customer rows, one for each city. These results were verified against the SQLite database using `python src/run_sql_queries.py`.
+
+
+### 7. Run exploratory data analysis (EDA)
+
+Run the EDA module to generate descriptive statistics, city-wise summaries, a SQLite-versus-Pandas validation, correlation matrices, IQR outlier analysis, and business insights.
+
+```powershell
+python src/eda_analysis.py
 ```
 
-The SQL queries are documented in `sql/queries.sql`.
+The script reads the cleaned datasets from `data/clean/` and saves the following reports in `outputs/`:
 
-### 7. Build customer features and segments
+- `eda_descriptive_statistics.csv` — descriptive statistics for customer age, order metrics, completed delivery times, and customer features.
+- `eda_city_order_status_pivot.csv` — order amount grouped by city and order status.
+- `eda_city_named_aggregation.csv` — named aggregation of completed order count, total revenue, and average order value by city.
+- `eda_order_correlation_matrix.csv` — correlations between completed-order numeric variables.
+- `eda_customer_feature_correlation.csv` — correlations between customer-level features.
+- `eda_outlier_summary.csv` — IQR quartiles, lower and upper fences, outlier counts, and percentages.
+- `eda_business_insights.txt` — summary of revenue, cancellations, city and category performance.
+
+**SQLite and Pandas cross-check**
+
+The script independently calculates city-wise completed order counts, total revenue, and average order value using Pandas and SQLite. It compares the results and raises an assertion if they do not match.
+
+Latest execution result:
+
+```text
+PASS: City-wise completed orders, revenue and average order value match.
+```
+
+**Key EDA findings**
+
+- The cleaned dataset contains 12,309 orders: 11,110 completed and 1,199 cancelled. The cancellation rate is 9.74%.
+- Completed-order revenue is INR 2,998,668.80. Hyderabad has the highest completed revenue at INR 528,589.90.
+- Delhi has the highest completed order count (2,064), while Mumbai has the highest average order value (INR 297.00).
+- Electronics is the highest-revenue product category, contributing INR 1,219,248.10 in completed-order revenue.
+- Average completed orders per customer are 9.26, and average completed spend is INR 2,498.89.
+
+**Correlation interpretation**
+
+- Completed-order quantity and order amount have a weak positive correlation (approximately 0.087).
+- Discount percentage and order amount have a weak negative correlation (approximately -0.095).
+- Customer recency and frequency have a moderate negative correlation (approximately -0.544); recency is measured in days, so lower recency generally indicates more recent activity.
+- `completed_orders` and `frequency` are equivalent measures in this dataset, as are `completed_spend` and `monetary`. Their correlations of 1.0 are expected because these are duplicate or equivalent derived features, not independent discoveries.
+- Correlation indicates association, not causation.
+
+**Outlier analysis**
+
+IQR fences flag 991 order amounts (8.05%), 919 completed delivery times (8.27%), and 33 customer completed-spend values (2.75%). No IQR outliers were detected for quantity or cleaned customer age. These observations are flagged for investigation and are not automatically removed.
+
+**Four business interpretations**
+
+1. **Cancellation performance:** The 9.74% cancellation rate indicates that roughly one in ten cleaned orders was cancelled. Investigate cancellation reasons before deciding on interventions.
+2. **City performance:** Hyderabad leads in completed revenue, Delhi leads in completed order count, and Mumbai leads in average order value. Revenue, volume, and order value should therefore be tracked as separate performance measures.
+3. **Product category performance:** Electronics contributes the highest completed revenue. This makes it a useful category for further analysis of demand, margins, and inventory; revenue alone does not establish profitability.
+4. **Customer behaviour and outliers:** Higher purchase frequency is associated with higher monetary value, while lower recency is associated with higher frequency. The relationship is observational, so it does not prove that increasing order frequency will cause higher spending.
+
+Delivery-time analysis uses completed orders only because cancelled orders do not have an applicable delivery duration. IQR outliers are retained unless a separate data-quality investigation establishes that they are invalid.
+
+
+### 8. Build customer features and segments
 
 ```powershell
 python src/customer_features.py
 python src/customer_segmentation.py
 ```
 
-### 8. Train and evaluate lapse prediction
+### 9. Train and evaluate lapse prediction
 
 ```powershell
 python src/lapse_prediction.py
 ```
 
-### 9. Run support ticket triage
+### 10. Run support ticket triage
 
 ```powershell
 python src/ticket_triage.py
 ```
 
-### 10. Run policy retrieval and evaluation
+### 11. Run policy retrieval and evaluation
 
 ```powershell
 python src/policy_rag.py
 ```
 
-### 11. Run refund-agent demonstrations
+### 12. Run refund-agent demonstrations
 
 Run the standard simulated refund demonstration:
 
@@ -123,10 +267,19 @@ Run the seven-scenario evaluation:
 ```powershell
 python src/refund_agent.py --scenarios
 ```
+Compare the ReAct agent with the deterministic Plan-and-Execute workflow:
+
+```powershell
+python src/plan_execute_comparison.py
+```
+
+This comparison runs both workflows against the seven scenarios and writes the results to `outputs/react_vs_plan_execute.csv`. It also appends simulated run and ledger records to the output logs.
 
 The agent uses synthetic order data and simulated refund actions.
 
-### 12. Run automated tests
+### 13. Run automated tests
+
+Run `python -m pytest -v` from the repository root. The latest verified run completed with **24 passed tests**.
 
 ```powershell
 python -m pytest -q
@@ -139,6 +292,47 @@ Generated results may change when scripts are rerun. The results below describe 
 ### Data foundation and cleaning
 
 The raw synthetic data contains customer, product, order, ticket, policy, and evaluation information. The cleaning pipeline removes duplicate order records and prepares clean datasets for analysis.
+
+### Raw-data audit
+
+The raw-data audit identified data-quality issues before cleaning.
+
+**Raw orders audit:**
+
+| Audit check | Count |
+|---|---:|
+| Raw order rows | 13,084 |
+| Exact duplicate rows | 119 |
+| Duplicate order-ID groups | 772 |
+| Extra repeated order-ID rows | 775 |
+| Distinct order IDs | 12,309 |
+| Missing order IDs | 0 |
+| Pending orders | 656 |
+| Non-numeric or missing order amounts | 120 |
+| Negative delivery times | 106 |
+| Blank delivery times | 2,541 |
+
+**Raw customers audit:**
+
+| Audit check | Count |
+|---|---:|
+| Raw customer rows | 1,200 |
+| Blank ages | 61 |
+| Ages outside the 10–100 range | 6 |
+| Unique city spellings | 24 |
+| Unique gender spellings | 10 |
+| Blank gender values | 30 |
+
+**Cleaning audit:**
+
+| Dataset | Raw rows | Clean rows | Raw exact duplicates | Clean exact duplicates | Clean duplicate IDs |
+|---|---:|---:|---:|---:|---:|
+| Customers | 1,200 | 1,200 | 0 | 0 | 0 |
+| Products | 40 | 40 | 0 | 0 | 0 |
+| Orders | 13,084 | 12,309 | 119 | 0 | 0 |
+| Tickets | 164 | 164 | 0 | 0 | 0 |
+
+The order audit distinguishes duplicate order-ID groups (772) from extra repeated order-ID rows (775). The cleaning audit confirms that the cleaned order dataset contains no duplicate IDs.
 
 Recorded database checkpoints:
 
@@ -157,6 +351,23 @@ The database validation script checks record counts, key uniqueness, missing ide
 ### Database and SQL analysis
 
 The SQLite database is stored at `data/instamart.db`. The analytical queries are documented in `sql/queries.sql`.
+
+#### SQL query results
+
+All seven queries were executed against `data/instamart.db` using `python src/run_sql_queries.py`.
+
+| Query | Analysis | Result rows |
+|---|---|---:|
+| Q1 | Customers with completed orders above INR 500 and total qualifying spending above INR 8,000 | 30 |
+| Q2 | Completed revenue grouped by city and product category | 30 |
+| Q3 | Products priced above the average product price | 11 |
+| Q4 | Customers with no completed orders | 25 |
+| Q5 | Customers whose completed spending exceeds the average customer-level completed spending | 550 |
+| Q6 | Highest-spending customer(s) in each city using ranking window functions | 6 |
+| Q7 | Daily completed revenue and cumulative revenue | 183 |
+
+**Q6 window-function interpretation:** `RANK()`, `DENSE_RANK()`, and `ROW_NUMBER()` rank customers by completed spending within each city. `RANK()` gives tied values the same rank and skips subsequent rank positions; `DENSE_RANK()` gives tied values the same rank without gaps; `ROW_NUMBER()` assigns a unique sequential number, using `customer_id` as a secondary sort key. The query filters to `spending_rank = 1`, returning the highest-spending customer(s) in each city. The executed query returned six rows, one for each city.
+
 
 Recorded monetary checkpoints:
 
@@ -197,23 +408,105 @@ Recorded segment distribution:
 
 A premium-customer flag identifies the selected Top Value segment for support prioritisation.
 
+### K-Means model selection and segment profiles
+
+K-Means was evaluated for K=2 through K=8 using standardized recency, frequency, and monetary (RFM) features. The evaluation used `StandardScaler`, `random_state=42`, and `n_init=10`.
+
+| K | Inertia | Silhouette score |
+|---:|---:|---:|
+| 2 | 1820.7 | 0.465 |
+| 3 | 1268.2 | 0.445 |
+| **4** | **743.0** | **0.525** |
+| 5 | 617.5 | 0.478 |
+| 6 | 503.2 | 0.483 |
+| 7 | 408.5 | 0.416 |
+| 8 | 366.2 | 0.412 |
+
+K=4 was selected because it achieved the highest silhouette score (0.525) among the tested values. The inertia reduction also becomes less pronounced after K=4, providing an additional elbow-based reason to prefer four clusters over larger values. This is a practical choice for this dataset, not a claim that four clusters are universally optimal.
+
+The final model clustered 1,175 customers with completed-order history. The remaining 25 customers, who had no completed orders, were assigned to a separate `No Completed Orders` group and were not included in K-Means.
+
+**Average RFM profile of the four K-Means segments:**
+
+| Segment | Customers | Mean recency (days) | Mean frequency | Mean monetary (INR) | Suggested business action |
+|---|---:|---:|---:|---:|---|
+| High Value | 419 | 9.13 | 19.40 | 3,410.02 | Prioritise retention and loyalty benefits for frequent, recently active customers. |
+| Low Spend | 183 | 109.28 | 2.21 | 707.33 | Consider re-engagement campaigns and relevant introductory offers. |
+| Regular Customers | 436 | 29.23 | 3.77 | 1,057.62 | Encourage repeat purchases through relevant recommendations and reminders. |
+| Top Value | 137 | 24.11 | 6.79 | 7,148.22 | Offer personalised service and monitor retention of high-spending customers. |
+
+Segment names are assigned by ascending mean monetary value. The numeric cluster IDs are arbitrary identifiers; they do not represent an ordered ranking. The business actions are suggested interventions, not experimentally validated outcomes.
+
+The `Top Value` segment is used to create the premium-customer flag after clustering. It is a descriptive, post-hoc label based on the full observation-window RFM values, not an independently predicted future outcome.
+
 ### Customer lapse prediction
 
-The lapse pipeline creates a labelled cohort, prepares customer features, compares candidate models, evaluates the selected model, and saves the model and retention outputs.
+The lapse prediction task uses a cutoff date of **2025-09-01**. Customers with at least one completed order before the cutoff are included in the prediction cohort. A customer is labelled as lapsed if they place no completed order during the September 2025 label window.
 
-Recorded selected-model results:
+**Cohort and split**
 
-| Metric | Result |
+| Item | Result |
 |---|---:|
-| Selected model | Random Forest |
-| Test accuracy | 0.737 |
-| Lapsed-class precision | 0.659 |
-| Lapsed-class recall | 0.652 |
-| Lapsed-class F1 | 0.655 |
+| Customers in lapse cohort | 1,156 |
+| Not Lapsed | 713 |
+| Lapsed | 443 |
+| Training rows | 924 (80%) |
+| Testing rows | 232 (20%) |
+| Split strategy | Stratified, random_state=42 |
 
-The recorded model was selected using cross-validation F1. Preprocessing should be fitted on training data only, and future information must not be used to construct prediction features.
+**Baseline**
 
-**Limitation:** A retention list is a prioritisation aid, not a guarantee that a customer will lapse. Features derived from a full observation window can introduce leakage if they are not restricted to information available at prediction time.
+The baseline predicts every test customer as Not Lapsed. It achieves 0.616 accuracy but 0.000 F1 for the Lapsed class, demonstrating why accuracy alone is insufficient for this imbalanced classification task.
+
+**Model comparison**
+
+| Metric | Logistic Regression | Random Forest |
+|---|---:|---:|
+| Best cross-validation F1 | 0.651 | **0.681** |
+| Test accuracy | 0.728 | **0.737** |
+| Lapsed precision | 0.64 | **0.66** |
+| Lapsed recall | 0.65 | 0.65 |
+| Lapsed F1 | 0.65 | **0.66** |
+
+Random Forest was selected based on its higher cross-validation F1, not on test-set performance. Its best parameters were `max_depth=8` and `min_samples_leaf=10`. The final test-set Lapsed F1 was 0.655.
+
+**Training-only preprocessing and leakage controls**
+
+- The train/test split is stratified and uses `random_state=42`.
+- Imputation, scaling and one-hot encoding are fitted within the training pipeline and cross-validation folds only.
+- Grid search uses training data only; the test set is reserved for final evaluation.
+- Oversampling is applied only to the training data. Test rows are not resampled.
+- Prediction features use completed-order history strictly before 2025-09-01. September 2025 orders are used only to construct the target label.
+- Segment IDs, segment names and the Premium flag are not included in the model's prediction features.
+
+**Oversampling comparison**
+
+| Model | Lapsed precision | Lapsed recall | Lapsed F1 |
+|---|---:|---:|---:|
+| Original Logistic Regression | 0.644 | 0.652 | 0.648 |
+| Oversampled Logistic Regression | 0.589 | 0.854 | 0.697 |
+
+Oversampling improves recall and F1 for the Lapsed class, but reduces precision. This trade-off means more actual lapsers are identified, at the cost of more false-positive retention targets.
+
+**Feature importance and coefficient interpretation**
+
+The Random Forest's five most important features were:
+
+| Feature | Importance |
+|---|---:|
+| Frequency | 0.280 |
+| Monetary | 0.271 |
+| Recency | 0.115 |
+| Average delivery minutes | 0.061 |
+| Cancellation rate | 0.052 |
+
+Purchase frequency and monetary value are the strongest contributors to the Random Forest's predictions. In Logistic Regression, the positive recency coefficient indicates that longer gaps since the last purchase are associated with higher predicted lapse odds; the negative frequency coefficient indicates that more frequent purchasing is associated with lower lapse odds. The positive monetary coefficient is a conditional model association, not proof of causation.
+
+**Premium retention list limitation**
+
+The Premium flag is assigned using the Top Value segment from whole-window RFM segmentation. It is applied after prediction to create an illustrative retention list; it is not a model feature. Because this flag uses information from the full observation window, the Premium-filtered retention list is **not a fully leakage-free evaluation**. In the current test set, 40 customers were Premium; the top-10 retention list contained 1 customer who actually lapsed. This list should be treated as a prioritisation example, not as an unbiased measure of model performance.
+
+The saved model was reloaded and its predictions matched the original model's predictions exactly.
 
 ### Part B outputs
 
@@ -225,7 +518,7 @@ The recorded model was selected using cross-validation F1. Preprocessing should 
 
 ### Privacy-aware ticket preparation
 
-The ticket-triage pipeline redacts personally identifiable information before classification. It validates model responses, applies fallback handling where necessary, and enforces token-budget controls.
+The ticket-triage pipeline redacts personally identifiable information before classification. Before each model call, explicit privacy assertions inspect both the system and user prompt messages and reject the call if any supported email-address, phone-number, or order-ID patterns remain. An additional assertion checks the redacted ticket text during triage. The pipeline also validates model responses, applies fallback handling where necessary, and enforces token-budget controls.
 
 Recorded PII redaction counts before replacement:
 
@@ -254,7 +547,7 @@ Recorded classification results:
 
 The accuracy figures apply to the 147 classified tickets, not all 164 input tickets. The four empty and four long tickets were skipped and are not included in that accuracy denominator.
 
-Few-shot classification improved the recorded accuracy but consumed more tokens. The budget demonstration enforces a token budget of 6,000 and shows the trade-off between coverage and cost.
+Few-shot classification achieved 100% accuracy compared with 85.7% for zero-shot classification across the 147 classified tickets. However, few-shot processing consumed 22,660 tokens, or 154.15 tokens per classified ticket, compared with 11,584 tokens, or 78.80 tokens per classified ticket, for zero-shot. This represents approximately 95.6% more tokens per classified ticket, showing that the accuracy improvement comes with nearly double the token cost. The separate budget demonstration enforces a 6,000-token limit, classifying 76 tickets and marking 76 as budget-exhausted.
 
 ### Part C outputs
 
@@ -275,12 +568,16 @@ Recorded retrieval configuration:
 | Chunks | 15 |
 | Chunk size | 40 words |
 | Chunk overlap | 10 words |
-| Top-k retrieval | 3 |
+| Top-k retrieval | 5 |
 | Evaluation questions | 14 |
 | Answerable questions passed | 12 of 12 |
 | Fallback questions passed | 2 of 2 |
 
-The recorded evaluation passed all 14 questions: 12 answerable questions and two questions that required fallback. The overlap comparison should also be reviewed when reproducing the policy evaluation.
+The recorded evaluation passed all 14 questions: 12 answerable questions and two questions that required fallback.
+
+**Chunk overlap comparison**
+
+In the recorded retrieval comparison, the 10-word-overlap configuration with top-k=3 did not retrieve all three required late-delivery conditions. Top-k=5 and top-k=8 retrieved all conditions. The no-overlap configurations also retrieved all conditions at top-k values of 3, 5, and 8. Therefore, chunk overlap alone did not guarantee better retrieval in this experiment.
 
 ### Refund-agent policy and guardrails
 
@@ -299,19 +596,19 @@ All refunds are simulated. No real payment or transfer occurs.
 
 ### Seven-scenario evaluation
 
-The recorded scenario run matched all seven expected outcomes and refund amounts:
+The latest scenario run passed all seven expected outcome, refund amount, escalation amount, and ledger checks:
 
-| Scenario | Expected outcome | Actual outcome | Expected refund | Actual refund |
-|---|---|---|---:|---:|
-| S1 | REFUND | REFUND | INR 128.25 | INR 128.25 |
-| S2 | REFUND | REFUND | INR 135.00 | INR 135.00 |
-| S3 | ESCALATE | ESCALATE | INR 1,999.00 | INR 1,999.00 |
-| S4 | DENIED | DENIED | INR 0.00 | INR 0.00 |
-| S5 | DENIED | DENIED | INR 0.00 | INR 0.00 |
-| S6 | NOT_FOUND | NOT_FOUND | INR 0.00 | INR 0.00 |
-| S7 | FALLBACK | FALLBACK_MAX_ITERATIONS | INR 0.00 | INR 0.00 |
+| Scenario | Expected outcome | Actual outcome | Expected refund | Actual refund | Expected escalation | Actual escalation | Ledger match |
+|---|---|---|---:|---:|---:|---:|---|
+| S1 | REFUND | REFUND | INR 128.25 | INR 128.25 | INR 0.00 | INR 0.00 | Yes |
+| S2 | REFUND | REFUND | INR 135.00 | INR 135.00 | INR 0.00 | INR 0.00 | Yes |
+| S3 | ESCALATE | ESCALATE | INR 0.00 | INR 0.00 | INR 1,999.00 | INR 1,999.00 | Yes |
+| S4 | DENIED | DENIED | INR 0.00 | INR 0.00 | INR 0.00 | INR 0.00 | Yes |
+| S5 | DENIED | DENIED | INR 0.00 | INR 0.00 | INR 0.00 | INR 0.00 | Yes |
+| S6 | NOT_FOUND | NOT_FOUND | INR 0.00 | INR 0.00 | INR 0.00 | INR 0.00 | Yes |
+| S7 | FALLBACK | FALLBACK | INR 0.00 | INR 0.00 | INR 0.00 | INR 0.00 | Yes |
 
-S7 stops with `FALLBACK_MAX_ITERATIONS`, demonstrating that the agent does not continue indefinitely.
+Validation summary: outcome matches 7/7, refund matches 7/7, escalation matches 7/7, and ledger matches 7/7. S7 returns `FALLBACK` safely when the agent cannot complete the workflow. All refund actions are simulated; no real money is transferred.
 
 ### Standard refund demonstration
 
@@ -329,7 +626,7 @@ The refund-agent implementation writes run information and refund-action records
 - `outputs/refund_ledger.jsonl`
 - `state/`
 
-Checkpoint files provide evidence about saved agent state. A successful recorded run or a checkpoint file alone does not prove that a simulated crash was triggered and the run resumed without repeating tools. The crash-and-resume acceptance requirement must be verified using the actual restart/resume procedure and its recorded tool sequence.
+The automated test suite includes checkpoint-resume tests for completed, in-progress, and missing checkpoint states. These tests passed as part of the latest 24-test run. This verifies the tested resume logic, but does not by itself demonstrate an externally interrupted process restarting and resuming without repeating tool calls. Checkpoint files and run logs provide supporting evidence of agent state and execution history.
 
 ### Part D outputs
 
@@ -338,6 +635,7 @@ Checkpoint files provide evidence about saved agent state. A successful recorded
 - `outputs/agent_runs.jsonl`
 - `outputs/refund_ledger.jsonl`
 - `outputs/refund_agent_scenarios.csv`
+- `outputs/react_vs_plan_execute.csv`
 - `outputs/refund_agent_demo.json`
 - `outputs/refund_agent_checkpoint.json`
 - `state/`
@@ -353,4 +651,3 @@ Checkpoint files provide evidence about saved agent state. A successful recorded
 - Refund actions are simulated and must not be connected to real payment systems without production-grade authentication, authorisation, audit, monitoring, and human-approval controls.
 - Checkpoint files and run logs should be tested through a real simulated interruption and resume procedure before claiming that crash recovery has been fully demonstrated.
 - A production implementation would require stronger monitoring, security reviews, policy versioning, data governance, and evaluation on representative real-world data.
-

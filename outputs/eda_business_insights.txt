@@ -1,0 +1,23 @@
+INSTAMART - EXPLORATORY DATA ANALYSIS
+=============================================
+Total customers: 1200
+Total orders: 12309
+Completed orders: 11110
+Cancelled orders: 1199
+Cancellation rate: 9.74%
+Completed order revenue: INR 2,998,668.80
+
+TOP CITY BY COMPLETED REVENUE:
+Hyderabad: INR 528,589.90
+
+TOP PRODUCT CATEGORY BY COMPLETED REVENUE:
+Electronics: INR 1,219,248.10
+
+CUSTOMER FEATURE SUMMARY:
+Average completed orders per customer: 9.26
+Average completed spend per customer: INR 2,498.89
+
+Interpretation note:
+Correlation indicates association, not causation.
+IQR outliers are flagged for investigation, not automatically removed.
+Delivery analysis uses completed orders only.

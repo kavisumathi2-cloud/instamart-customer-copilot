@@ -4,6 +4,7 @@ import re
 import sys
 from pathlib import Path
 
+
 import pandas as pd
 from sklearn.feature_extraction.text import (
     TfidfVectorizer,
@@ -13,13 +14,14 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+import mock_llm
 
 POLICY_DIR = ROOT / "data" / "policies"
 OUTPUT_DIR = ROOT / "outputs"
 
 CHUNK_SIZE = 40
 CHUNK_OVERLAP = 10
-TOP_K = 3
+TOP_K = 5
 MIN_SIMILARITY = 0.03
 
 FALLBACK_ANSWER = (
@@ -91,7 +93,6 @@ def split_documents(
                 break
 
     return chunks
-
 
 # --------------------------------------------------
 # 3. BUILD TF-IDF RETRIEVER
@@ -240,9 +241,9 @@ def apply_policy_rules(question):
         or "ways to pay" in q
     ):
         return (
-            "Customers can pay using UPI, debit card, credit card, "
-            "or cash on delivery. Cash on delivery is available "
-            "only for orders up to INR 2500.",
+            "Available payment methods are UPI, debit card, "
+            "credit card and cash on delivery. Cash on delivery "
+            "is available only for orders up to INR 2500.",
             "payment_policy.txt",
         )
 
@@ -309,6 +310,8 @@ def apply_policy_rules(question):
 # 6. ANSWER A POLICY QUESTION
 # --------------------------------------------------
 
+
+
 def answer_question(question, chunks, vectorizer, matrix):
     retrieved = retrieve_policy(
         question,
@@ -318,6 +321,7 @@ def answer_question(question, chunks, vectorizer, matrix):
         top_k=TOP_K,
     )
 
+    # Check known policy rules before the retrieval fallback.
     rule_answer, rule_source = apply_policy_rules(question)
 
     if rule_answer:
@@ -328,6 +332,7 @@ def answer_question(question, chunks, vectorizer, matrix):
             "method": "policy_rule",
         }
 
+    # Unknown questions must have relevant retrieved context.
     if not has_relevant_query_terms(question, retrieved):
         return {
             "answer": FALLBACK_ANSWER,
@@ -336,16 +341,48 @@ def answer_question(question, chunks, vectorizer, matrix):
             "method": "no_relevant_context",
         }
 
-    best = retrieved[0]
+    context = "\n\n".join(
+        f"[{item['source']}]\n{item['text']}"
+        for item in retrieved
+    )
+
+    sources = sorted({
+        item["source"] for item in retrieved
+    })
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a POLICY ASSISTANT. "
+                "Answer the user's question using only "
+                "the provided policy context. "
+                "Do not invent policy details. "
+                "If the context does not contain the answer, "
+                "say that the information is unavailable."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"CONTEXT:\n{context}\n"
+                f"QUESTION:\n{question}"
+            ),
+        },
+    ]
+
+    response = mock_llm.chat(messages)
+    answer = response.choices[0].message.content
 
     return {
-        "answer": best["text"],
-        "sources": sorted({
-            item["source"] for item in retrieved
-        }),
+        "answer": answer,
+        "sources": sources,
         "retrieved": retrieved,
-        "method": "retrieval_extract",
+        "method": "mock_llm",
     }
+
+
+
 
 
 # --------------------------------------------------

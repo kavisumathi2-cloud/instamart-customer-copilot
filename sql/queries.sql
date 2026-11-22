@@ -1,5 +1,6 @@
+-- Q1: Completed orders over INR 500,
+-- customers with total spending above INR 8,000
 
--- Q1: Completed orders over ₹500, customers with total spending above ₹8,000
 SELECT
     customer_id,
     ROUND(SUM(order_amount), 2) AS total_spending
@@ -12,6 +13,7 @@ ORDER BY total_spending DESC;
 
 
 -- Q2: Completed order revenue by city and product category
+
 SELECT
     c.city,
     p.category,
@@ -26,7 +28,8 @@ GROUP BY c.city, p.category
 ORDER BY c.city, p.category;
 
 
--- Q3: Products priced above the average product price
+-- Q3: Products priced above average product price
+
 SELECT
     product_id,
     product_name,
@@ -41,6 +44,7 @@ ORDER BY price_inr DESC;
 
 
 -- Q4: Customers with no completed orders
+
 SELECT
     c.customer_id
 FROM customers c
@@ -51,8 +55,9 @@ WHERE o.order_id IS NULL
 ORDER BY c.customer_id;
 
 
--- Q5: Customers whose completed spending is above
--- the average completed spending per customer
+-- Q5: Customers whose completed spending
+-- is above average completed spending per customer
+
 SELECT
     customer_id,
     ROUND(SUM(order_amount), 2) AS completed_spending
@@ -71,7 +76,9 @@ HAVING SUM(order_amount) > (
 ORDER BY completed_spending DESC;
 
 
--- Q6: Compare RANK and ROW_NUMBER to identify ties
+-- Q6: Compare RANK, DENSE_RANK and ROW_NUMBER
+-- Identify the highest-spending customer(s) in each city
+
 WITH customer_city_spending AS (
     SELECT
         c.city,
@@ -88,14 +95,22 @@ ranked AS (
         city,
         customer_id,
         total_spending,
+
         RANK() OVER (
             PARTITION BY city
             ORDER BY total_spending DESC
         ) AS spending_rank,
+
+        DENSE_RANK() OVER (
+            PARTITION BY city
+            ORDER BY total_spending DESC
+        ) AS dense_rank_value,
+
         ROW_NUMBER() OVER (
             PARTITION BY city
             ORDER BY total_spending DESC, customer_id
         ) AS row_number_rank
+
     FROM customer_city_spending
 )
 SELECT
@@ -103,13 +118,15 @@ SELECT
     customer_id,
     ROUND(total_spending, 2) AS total_spending,
     spending_rank,
+    dense_rank_value,
     row_number_rank
 FROM ranked
-WHERE spending_rank <> row_number_rank
+WHERE spending_rank = 1
 ORDER BY city, spending_rank, customer_id;
 
 
 -- Q7: Daily completed revenue and cumulative revenue
+
 WITH daily_spending AS (
     SELECT
         DATE(order_ts) AS order_date,

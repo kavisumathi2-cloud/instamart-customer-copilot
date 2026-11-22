@@ -235,6 +235,14 @@ def call_model_with_retry(system_prompt, user_text, ticket_id):
         {"role": "user", "content": user_text},
     ]
 
+    # Privacy guard: check every message before sending it to the model.
+    for message in messages:
+        remaining_pii = count_pii(message["content"])
+        assert not any(remaining_pii.values()), (
+            f"PII detected in {message['role']} prompt for "
+            f"ticket {ticket_id}: {remaining_pii}"
+        )
+
     for retry_number in range(MAX_RETRIES + 1):
         try:
             response = mock_llm.chat(messages)
@@ -414,6 +422,13 @@ def run_triage(
         # Redact sensitive information before model processing.
         redacted_text = redact_pii(original_text)
         pii_remaining = count_pii(redacted_text)
+
+        # Explicit privacy assertion: no supported PII patterns
+        # may remain in text prepared for model processing.
+        assert not any(pii_remaining.values()), (
+            f"PII detected after redaction for ticket {ticket_id}: "
+            f"{pii_remaining}"
+        )
 
         segment_info = segments.get(
             str(customer_id).strip(),
