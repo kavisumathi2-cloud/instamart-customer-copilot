@@ -193,9 +193,11 @@ The raw-data audit identified data-quality issues before cleaning.
 | Distinct order IDs | 12,309 |
 | Missing order IDs | 0 |
 | Pending orders | 656 |
-| Non-numeric or missing order amounts | 120 |
+| Invalid, missing, or negative order amounts (raw rows) | 120 |
 | Negative delivery times | 106 |
 | Blank delivery times | 2,541 |
+
+After retaining the latest record per order ID, 112 invalid, missing, or negative amounts remained. All 112 were recovered using product price, quantity, and discount; no unrecoverable amount rows remained. The raw count of 120 and latest-record count of 112 refer to different processing stages.
 
 **Raw customers audit:**
 
@@ -299,6 +301,8 @@ All seven queries were executed against `data/instamart.db` using `python src/ru
 | Q7 | Daily completed revenue and cumulative revenue | 183 |
 
 **Q6 window-function interpretation:** `RANK()`, `DENSE_RANK()`, and `ROW_NUMBER()` rank customers by completed spending within each city. `RANK()` gives tied values the same rank and skips subsequent rank positions; `DENSE_RANK()` gives tied values the same rank without gaps; `ROW_NUMBER()` assigns a unique sequential number, using `customer_id` as a secondary sort key. The query filters to `spending_rank = 1`, returning the highest-spending customer(s) in each city. The executed query returned six rows, one for each city.
+
+**Actual tie evidence:** The completed-spending data contains seven tied customer groups across Bengaluru (2), Mumbai (2), and Pune (3). For example, Bengaluru customers C0692 and C0734 each spent INR 2,598. Both receive `RANK() = 99` and `DENSE_RANK() = 99`, while `ROW_NUMBER()` assigns 99 and 100. The next customer, C0746, receives `RANK() = 101` and `DENSE_RANK() = 100`. This demonstrates the rank gap created by `RANK()` and avoided by `DENSE_RANK()`.
 
 
 Recorded monetary checkpoints:

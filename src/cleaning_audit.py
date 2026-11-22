@@ -146,17 +146,63 @@ def audit_orders(rows):
         "Retain only completed and cancelled latest records."
     )
 
+    raw_pending = int(
+        raw["status"].astype("string").str.strip().str.lower().eq("pending").sum()
+    )
+    latest_pending = int(
+        status.eq("pending").sum()
+    )
+
+    add(
+        rows,
+        "orders",
+        "Raw pending records absent after latest-record selection",
+        raw_pending,
+        latest_pending,
+        raw_pending - latest_pending,
+        "Pending rows are superseded by later records for the same order IDs. This count overlaps with latest-record removal; do not add it again to total rows removed."
+    )
+
     numeric_amount = pd.to_numeric(latest["order_amount"], errors="coerce")
     invalid_amount = numeric_amount.isna() | (numeric_amount < 0)
 
-    clean_amount_missing = int(clean["order_amount"].isna().sum())
+    products = pd.read_csv(RAW / "products.csv")
+    products["price_inr"] = pd.to_numeric(
+        products["price_inr"], errors="coerce"
+    )
+
+    price_lookup = products.set_index("product_id")["price_inr"]
+
+    numeric_quantity = pd.to_numeric(
+        latest["quantity"], errors="coerce"
+    )
+    numeric_discount = pd.to_numeric(
+        latest["discount_pct"], errors="coerce"
+    )
+
+    expected_amount = (
+        latest["product_id"].map(price_lookup)
+        * numeric_quantity
+        * (1 - numeric_discount.fillna(0) / 100)
+    )
+
+    recoverable = (
+        invalid_amount
+        & expected_amount.notna()
+        & (expected_amount >= 0)
+    )
+    unrecoverable = invalid_amount & ~recoverable
 
     add(
-        rows, "orders", "Invalid order amount handling",
-        int(invalid_amount.sum()),
-        clean_amount_missing,
-        int(invalid_amount.sum()) - clean_amount_missing,
-        "Recover invalid amounts from product price, quantity and discount; remove unrecoverable amounts."
+        rows, "orders", "Invalid order amounts recovered",
+        int(recoverable.sum()), 0, int(recoverable.sum()),
+        "Recover using product price, quantity and discount."
+    )
+
+    add(
+        rows, "orders", "Unrecoverable order amounts removed",
+        int(unrecoverable.sum()), 0, int(unrecoverable.sum()),
+        "Remove rows when a valid replacement amount cannot be calculated."
     )
 
     numeric_delivery = pd.to_numeric(

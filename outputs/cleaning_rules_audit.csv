@@ -7,7 +7,9 @@ customers,Duplicate customer ID removal,0,0,0,Keep the last record for each cust
 products,Duplicate product ID removal,0,0,0,Keep the last record for each product ID.
 orders,Keep latest record per order ID,775,0,775,Sort by order timestamp and retain the latest row per order ID.
 orders,Final status filtering,0,0,0,Retain only completed and cancelled latest records.
-orders,Invalid order amount handling,112,0,112,"Recover invalid amounts from product price, quantity and discount; remove unrecoverable amounts."
+orders,Raw pending records absent after latest-record selection,656,0,656,Pending rows are superseded by later records for the same order IDs. This count overlaps with latest-record removal; do not add it again to total rows removed.
+orders,Invalid order amounts recovered,112,0,112,"Recover using product price, quantity and discount."
+orders,Unrecoverable order amounts removed,0,0,0,Remove rows when a valid replacement amount cannot be calculated.
 orders,Completed delivery time handling,774,0,774,"Replace negative values with missing; impute using product-category median, then overall completed-order median."
 orders,Cancelled delivery time,1199,0,1199,Delivery duration is not applicable to cancelled orders.
 tickets,Exact duplicate row removal,0,0,0,Remove exact duplicate ticket rows.
