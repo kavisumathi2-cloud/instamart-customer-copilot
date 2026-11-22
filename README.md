@@ -341,6 +341,53 @@ The raw-data audit identified data-quality issues before cleaning.
 | Unique gender spellings | 10 |
 | Blank gender values | 30 |
 
+**Original raw city spellings and frequencies:**
+
+| Raw spelling | Rows |
+|---|---:|
+| Pune | 148 |
+| Delhi | 123 |
+| Hyderabad | 119 |
+| Bengaluru | 115 |
+| Mumbai | 113 |
+| Chennai | 106 |
+| chennai | 44 |
+| hyderabad | 40 |
+| delhi | 36 |
+| mumbai | 35 |
+| pune | 35 |
+| BENGALURU | 32 |
+| ` Delhi` | 30 |
+| bengaluru | 27 |
+| PUNE | 24 |
+| ` Bengaluru` | 23 |
+| DELHI | 21 |
+| CHENNAI | 21 |
+| ` Chennai` | 20 |
+| ` Pune` | 20 |
+| ` Mumbai` | 19 |
+| ` Hyderabad` | 18 |
+| MUMBAI | 17 |
+| HYDERABAD | 14 |
+
+**Original raw gender spellings and frequencies:**
+
+| Raw spelling | Rows |
+|---|---:|
+| female | 136 |
+| FEMALE | 122 |
+| F | 120 |
+| m | 118 |
+| f | 117 |
+| Female | 115 |
+| male | 114 |
+| MALE | 110 |
+| M | 110 |
+| Male | 108 |
+| Missing | 30 |
+
+The raw city values contain capitalization and leading-whitespace variants of six underlying city names. The raw gender values contain capitalization and single-letter variants of male and female. The cleaning pipeline standardizes these variants into six city names and three gender categories, while preserving missing or unrecognized gender values as `unknown`.
+
 **Cleaning audit:**
 
 | Dataset | Raw rows | Clean rows | Raw exact duplicates | Clean exact duplicates | Clean duplicate IDs |
@@ -568,7 +615,7 @@ The accuracy figures apply to the 147 classified tickets, not all 164 input tick
 The four long tickets (T0161, T0162, T0163 and T0164) were each estimated at 734 tokens after PII redaction, for a combined estimated 2,936 tokens. Each exceeded the 400-token ticket limit and was routed to human review without being sent to the language model. These four tickets therefore used zero model tokens.
 
 
-Few-shot classification achieved 100% accuracy compared with 85.7% for zero-shot classification across the 147 classified tickets. However, few-shot processing consumed 22,660 tokens, or 154.15 tokens per classified ticket, compared with 11,584 tokens, or 78.80 tokens per classified ticket, for zero-shot. This represents approximately 95.6% more tokens per classified ticket, showing that the accuracy improvement comes with nearly double the token cost. The separate budget demonstration enforces a 6,000-token limit, classifying 76 tickets and marking 76 as budget-exhausted.
+Few-shot classification achieved 100% accuracy compared with 85.7% for zero-shot classification across the 147 classified tickets. It consumed 22,660 tokens (154.15 per classified ticket), compared with 11,584 tokens (78.80 per ticket) for zero-shot, approximately 95.6% more tokens per ticket. The additional cost can be justified for ambiguous or high-impact tickets, such as fraud-related cases, when incorrect routing could delay critical support and the token budget allows it. Zero-shot is more economical for routine, lower-risk tickets or strict token budgets; a practical system can reserve few-shot prompting for uncertain or high-risk cases. The separate budget demonstration enforces a 6,000-token limit, classifying 76 tickets and marking 76 as budget-exhausted.
 
 ### Part C outputs
 
