@@ -299,7 +299,7 @@ The agent uses synthetic order data and simulated refund actions.
 
 ### 13. Run automated tests
 
-Run `python -m pytest -v` from the repository root. The latest verified run completed with **24 passed tests**.
+Run `python -m pytest -v` from the repository root. The latest verified run completed with **25 passed tests**.
 
 ```powershell
 python -m pytest -q
@@ -733,6 +733,7 @@ The automated test suite includes checkpoint-resume tests for completed, in-prog
 | Total LLM calls | 5 |
 | Final workflow steps | 4 |
 
+The interruption is reproduced in `tests/test_crash_resume.py`, which raises a simulated crash before the third tool call, then resumes the saved run and asserts that only `calculate_refund` and `issue_refund` execute afterwards and that exactly one refund is written to the ledger.
 The test resumed the same saved run using `resume_agent(run_id)`. It verified that the two completed tool steps were preserved and were not repeated. The final result was `REFUND: INR 58.0 issued.` This demonstrates recovery after a successfully persisted tool checkpoint. It does not establish exactly-once execution if a process crashes in the interval between a tool side effect and its checkpoint write.
 
 ### Part D outputs
