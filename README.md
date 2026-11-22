@@ -576,7 +576,6 @@ Business reading of the top features:
 - **Monetary:** Monetary value is highly important in the Random Forest. In Logistic Regression its coefficient is positive: after accounting for frequency, higher spend is associated with slightly higher lapse odds. Frequency and monetary are correlated, so this is a conditional association, not evidence that spending causes lapse.
 - **Average delivery minutes and cancellation rate:** These rank fourth and fifth in Random Forest importance, so they contribute to predictions. Their direction was not evaluated in this project.
 
-Purchase frequency and monetary value are the strongest contributors to the Random Forest's predictions. In Logistic Regression, the positive recency coefficient indicates that longer gaps since the last purchase are associated with higher predicted lapse odds; the negative frequency coefficient indicates that more frequent purchasing is associated with lower lapse odds. The positive monetary coefficient is a conditional model association, not proof of causation.
 
 **Premium retention list limitation**
 
