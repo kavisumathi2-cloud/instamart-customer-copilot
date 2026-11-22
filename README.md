@@ -533,6 +533,8 @@ Recorded classification results:
 
 The accuracy figures apply to the 147 classified tickets, not all 164 input tickets. The four empty and four long tickets were skipped and are not included in that accuracy denominator.
 
+The output also records 9 tickets with invalid model outputs. These were routed to `human_review` and are not counted among the 147 successfully classified tickets. Therefore, all 164 input tickets are accounted for: 147 classified, 9 flagged for invalid output, 4 skipped as empty, and 4 flagged as too long.
+
 The four long tickets (T0161, T0162, T0163 and T0164) were each estimated at 734 tokens after PII redaction, for a combined estimated 2,936 tokens. Each exceeded the 400-token ticket limit and was routed to human review without being sent to the language model. These four tickets therefore used zero model tokens.
 
 
@@ -583,7 +585,7 @@ Recorded policy thresholds:
 - Missing orders must not be refunded.
 - The agent must stop safely when its limits are reached.
 
-The agent exposes its tools through a TOOLS_SPEC list and a TOOL_MAP dictionary. get_order reads from data/instamart.db using a parameterized query. issue_refund and escalate_to_human append a timestamped record with the tool name to outputs/refund_ledger.jsonl.
+The agent exposes its tools through a TOOLS_SPEC list and a TOOL_MAP dictionary. get_order reads from data/instamart.db using a parameterized query. issue_refund and escalate_to_human write a ledger record containing an event ID, UTC timestamp, tool name, run ID, scenario ID, order ID, refund amount, status, and a flag confirming that no real money was transferred. Before writing, the function checks whether the same event ID already exists and returns the existing record instead of appending a duplicate. The existing ledger also contains 26 legacy records written before these fields were introduced.
 
 All refunds are simulated. No real payment or transfer occurs.
 
@@ -638,7 +640,7 @@ The automated test suite includes checkpoint-resume tests for completed, in-prog
 | Status at interruption | `in_progress` |
 | Completed tools before interruption | `get_order`, `search_policy` |
 | Saved tool-call history | 2 calls |
-| Tool sequence after resume | `get_order` -> `search_policy` -> `calculate_refund` -> `issue_refund` |
+| Final recorded tool sequence (including pre-interruption steps) | `get_order` -> `search_policy` -> `calculate_refund` -> `issue_refund` |
 | Re-execution of the first two tools | None |
 | Final status | `REFUND` |
 | Final simulated refund | INR 58.00 |
