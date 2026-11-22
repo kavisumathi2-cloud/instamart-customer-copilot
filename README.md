@@ -1,4 +1,4 @@
-﻿# Instamart Customer Intelligence & Support Copilot
+# Instamart Customer Intelligence & Support Copilot
 
 ## Overview
 
