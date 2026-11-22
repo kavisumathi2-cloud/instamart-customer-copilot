@@ -275,6 +275,24 @@ python src/plan_execute_comparison.py
 
 This comparison runs both workflows against the seven scenarios and writes the results to `outputs/react_vs_plan_execute.csv`. It also appends simulated run and ledger records to the output logs.
 
+#### ReAct vs deterministic Plan-and-Execute results
+
+The recorded comparison produced the following results across all seven scenarios:
+
+| Metric | ReAct agent | Deterministic Plan-and-Execute |
+|---|---:|---:|
+| Expected outcomes matched | 7/7 | 7/7 |
+| Refund amounts matched | 7/7 | 7/7 |
+| Escalation amounts matched | 7/7 | 7/7 |
+| Total model calls | 26 | 0 |
+| Total tool/workflow calls | 19 | 22 |
+
+The ReAct agent uses the offline mock language model to select and execute tools. The Plan-and-Execute implementation uses a predefined Python plan and deterministic conditional logic; it does not use an LLM planner. Its zero model calls therefore reflect its deterministic design, not equivalent general-purpose reasoning capability. In this recorded comparison, both workflows matched all seven expected outcomes and their expected refund and escalation amounts.
+
+The Plan-and-Execute workflow checks observations before continuing. It stops or returns a safe result when an order is missing or not completed, policy retrieval fails, required policy evidence is incomplete, a calculation result is unexpected, or the final action result is unexpected. It selects either refund issuance or human escalation based on the calculation result. An intentional `[LOOP]` test also repeats an identical tool call; the duplicate-call guard detects it and stops safely.
+
+The CSV records six Plan-and-Execute replan events across the seven scenarios. This count includes recorded action-selection and safe-stop events; it should not be interpreted as six dynamically generated replacement plans. The workflow is deterministic and does not demonstrate adaptive LLM planning.
+
 The agent uses synthetic order data and simulated refund actions.
 
 ### 13. Run automated tests
@@ -547,6 +565,9 @@ Recorded classification results:
 
 The accuracy figures apply to the 147 classified tickets, not all 164 input tickets. The four empty and four long tickets were skipped and are not included in that accuracy denominator.
 
+The four long tickets (T0161, T0162, T0163 and T0164) were each estimated at 734 tokens after PII redaction, for a combined estimated 2,936 tokens. Each exceeded the 400-token ticket limit and was routed to human review without being sent to the language model. These four tickets therefore used zero model tokens.
+
+
 Few-shot classification achieved 100% accuracy compared with 85.7% for zero-shot classification across the 147 classified tickets. However, few-shot processing consumed 22,660 tokens, or 154.15 tokens per classified ticket, compared with 11,584 tokens, or 78.80 tokens per classified ticket, for zero-shot. This represents approximately 95.6% more tokens per classified ticket, showing that the accuracy improvement comes with nearly double the token cost. The separate budget demonstration enforces a 6,000-token limit, classifying 76 tickets and marking 76 as budget-exhausted.
 
 ### Part C outputs
@@ -610,6 +631,18 @@ The latest scenario run passed all seven expected outcome, refund amount, escala
 
 Validation summary: outcome matches 7/7, refund matches 7/7, escalation matches 7/7, and ledger matches 7/7. S7 returns `FALLBACK` safely when the agent cannot complete the workflow. All refund actions are simulated; no real money is transferred.
 
+### Stop-safe budget demonstrations
+
+Two additional runs verified that the agent stops before exceeding its configured limits:
+
+| Demonstration | Configuration | Actual status | LLM calls | Tokens used | Steps |
+|---|---|---|---:|---:|---:|
+| Token budget | `token_limit=200`, `time_limit_seconds=10` | `FALLBACK_TOKEN_LIMIT` | 2 | 182 | 2 |
+| Zero time budget | `token_limit=6000`, `time_limit_seconds=0` | `FALLBACK_TIMEOUT` | 0 | 0 | 0 |
+
+For the 200-token test, the agent stopped before making the next LLM call because the estimated next prompt would exceed the remaining budget. It used 182 tokens and did not exceed the configured limit. With a zero-second time limit, it stopped before making any LLM call or executing any tool. Both runs returned safe fallback statuses; neither issued a refund.
+
+
 ### Standard refund demonstration
 
 The standard demonstration uses order `ORD-110603`. The recorded order amount is INR 58, and the delivery time is 70 minutes. The request age is three days, which is within the configured seven-day request window.
@@ -626,7 +659,21 @@ The refund-agent implementation writes run information and refund-action records
 - `outputs/refund_ledger.jsonl`
 - `state/`
 
-The automated test suite includes checkpoint-resume tests for completed, in-progress, and missing checkpoint states. These tests passed as part of the latest 24-test run. This verifies the tested resume logic, but does not by itself demonstrate an externally interrupted process restarting and resuming without repeating tool calls. Checkpoint files and run logs provide supporting evidence of agent state and execution history.
+The automated test suite includes checkpoint-resume tests for completed, in-progress, and missing checkpoint states. In addition, a controlled interruption-and-resume demonstration was executed using a unique run ID (`crash-resume-demo-20261122-001`). The run was deliberately interrupted immediately after the second tool checkpoint had been saved.
+
+| Checkpoint / resume evidence | Observed result |
+|---|---|
+| Status at interruption | `in_progress` |
+| Completed tools before interruption | `get_order`, `search_policy` |
+| Saved tool-call history | 2 calls |
+| Tool sequence after resume | `get_order` -> `search_policy` -> `calculate_refund` -> `issue_refund` |
+| Re-execution of the first two tools | None |
+| Final status | `REFUND` |
+| Final simulated refund | INR 58.00 |
+| Total LLM calls | 5 |
+| Final workflow steps | 4 |
+
+The test resumed the same saved run using `resume_agent(run_id)`. It verified that the two completed tool steps were preserved and were not repeated. The final result was `REFUND: INR 58.0 issued.` This demonstrates recovery after a successfully persisted tool checkpoint. It does not establish exactly-once execution if a process crashes in the interval between a tool side effect and its checkpoint write.
 
 ### Part D outputs
 
@@ -649,5 +696,5 @@ The automated test suite includes checkpoint-resume tests for completed, in-prog
 - Lapse prediction depends on the observation window, label definition, feature availability, and leakage prevention.
 - The retention list supports prioritisation but does not guarantee future customer behaviour.
 - Refund actions are simulated and must not be connected to real payment systems without production-grade authentication, authorisation, audit, monitoring, and human-approval controls.
-- Checkpoint files and run logs should be tested through a real simulated interruption and resume procedure before claiming that crash recovery has been fully demonstrated.
+- The controlled crash-resume test covers interruption after a successfully saved checkpoint. A crash between a tool side effect and checkpoint persistence remains a possible duplicate-execution window; production use would require stronger transactional or idempotent side-effect handling.
 - A production implementation would require stronger monitoring, security reviews, policy versioning, data governance, and evaluation on representative real-world data.
