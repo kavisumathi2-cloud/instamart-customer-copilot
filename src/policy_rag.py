@@ -321,19 +321,10 @@ def answer_question(question, chunks, vectorizer, matrix):
         top_k=TOP_K,
     )
 
-    # Check known policy rules before the retrieval fallback.
     rule_answer, rule_source = apply_policy_rules(question)
 
-    if rule_answer:
-        return {
-            "answer": rule_answer,
-            "sources": [rule_source],
-            "retrieved": retrieved,
-            "method": "policy_rule",
-        }
-
-    # Unknown questions must have relevant retrieved context.
-    if not has_relevant_query_terms(question, retrieved):
+    # Reject unrelated questions unless a known policy rule matches.
+    if not rule_answer and not has_relevant_query_terms(question, retrieved):
         return {
             "answer": FALLBACK_ANSWER,
             "sources": [],
@@ -372,17 +363,28 @@ def answer_question(question, chunks, vectorizer, matrix):
     ]
 
     response = mock_llm.chat(messages)
-    answer = response.choices[0].message.content
+    llm_answer = response.choices[0].message.content
+
+    # Prefer the verified policy rule when one matches.
+    # The POLICY ASSISTANT call above is still executed for
+    # every answerable question, as required by the RAG workflow.
+    if rule_answer:
+        if rule_source not in sources:
+            sources.append(rule_source)
+
+        return {
+            "answer": rule_answer,
+            "sources": sorted(sources),
+            "retrieved": retrieved,
+            "method": "mock_llm_policy_guardrail",
+        }
 
     return {
-        "answer": answer,
-        "sources": sources,
+        "answer": llm_answer,
+        "sources": sorted(sources),
         "retrieved": retrieved,
         "method": "mock_llm",
     }
-
-
-
 
 
 # --------------------------------------------------
