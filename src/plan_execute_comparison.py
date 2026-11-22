@@ -1,5 +1,6 @@
 
 import json
+import math
 import re
 import uuid
 from pathlib import Path
@@ -215,7 +216,12 @@ def run_plan_execute(message, scenario_id, request_days=3):
         },
     )
 
-    if "error" in calculation or "eligible" not in calculation:
+    # Validate the complete calculation response before using it.
+    if (
+        not isinstance(calculation, dict)
+        or "error" in calculation
+        or not isinstance(calculation.get("eligible"), bool)
+    ):
         result["status"] = "FALLBACK_CALCULATION_ERROR"
         result["replans"].append(
             "Unexpected calculation result; stopped safely."
@@ -225,10 +231,32 @@ def run_plan_execute(message, scenario_id, request_days=3):
 
     if not calculation["eligible"]:
         result["status"] = "DENIED"
-        result["final_answer"] = calculation["reason"]
+        result["final_answer"] = str(
+            calculation.get("reason", "Refund is not eligible.")
+        )
         return result
 
-    refund_amount = float(calculation["refund_inr"])
+    try:
+        refund_amount = float(calculation["refund_inr"])
+    except (KeyError, TypeError, ValueError, OverflowError):
+        refund_amount = float("nan")
+
+    if (
+        not math.isfinite(refund_amount)
+        or refund_amount <= 0
+        or not isinstance(
+            calculation.get("requires_human_approval"), bool
+        )
+    ):
+        result["status"] = "FALLBACK_CALCULATION_ERROR"
+        result["replans"].append(
+            "Malformed calculation fields; stopped safely."
+        )
+        result["final_answer"] = (
+            "Stopped safely because the refund calculation "
+            "returned invalid data."
+        )
+        return result
 
     # RE-PLAN: Select the action using the calculation result.
     if calculation["requires_human_approval"]:

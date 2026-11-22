@@ -299,7 +299,12 @@ The agent uses synthetic order data and simulated refund actions.
 
 ### 13. Run automated tests
 
-Run `python -m pytest -v` from the repository root. The latest verified run completed with **25 passed tests**.
+Run `python -m pytest -v` from the repository root. The latest verified run completed with **35 passed tests**.
+
+The automated suite covers refund request validation, refund safety rules, crash-and-resume behavior, ticket PII redaction and prompt privacy, and Plan-and-Execute workflow safety.
+
+The Plan-and-Execute tests cover missing order IDs, invalid request windows, missing and cancelled orders, policy retrieval failures, incomplete policy evidence, calculation errors and malformed calculation responses, duplicate tool-call prevention, and unexpected action responses.
+
 
 ```powershell
 python -m pytest -q
