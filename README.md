@@ -487,6 +487,8 @@ K-Means was evaluated for K=2 through K=8 using standardized recency, frequency,
 | 7 | 408.5 | 0.416 |
 | 8 | 366.2 | 0.412 |
 
+Inertia always decreases as K increases because additional centroids reduce within-cluster distance, so inertia alone cannot determine the best K; it must be read together with silhouette score and business interpretability.
+
 K=4 was selected because it achieved the highest silhouette score (0.525) among the tested values. The inertia reduction also becomes less pronounced after K=4, providing an additional elbow-based reason to prefer four clusters over larger values. This is a practical choice for this dataset, not a claim that four clusters are universally optimal.
 
 The final model clustered 1,175 customers with completed-order history. The remaining 25 customers, who had no completed orders, were assigned to a separate `No Completed Orders` group and were not included in K-Means.
@@ -564,6 +566,13 @@ The Random Forest's five most important features were:
 | Recency | 0.115 |
 | Average delivery minutes | 0.061 |
 | Cancellation rate | 0.052 |
+
+Business reading of the top features:
+
+- **Frequency:** The negative Logistic Regression coefficient means customers who order more often have lower lapse odds. Frequency is also the most important Random Forest feature.
+- **Recency:** The positive coefficient means a longer gap since the last order is associated with higher lapse odds.
+- **Monetary:** Monetary value is highly important in the Random Forest. In Logistic Regression its coefficient is positive: after accounting for frequency, higher spend is associated with slightly higher lapse odds. Frequency and monetary are correlated, so this is a conditional association, not evidence that spending causes lapse.
+- **Average delivery minutes and cancellation rate:** These rank fourth and fifth in Random Forest importance, so they contribute to predictions. Their direction was not evaluated in this project.
 
 Purchase frequency and monetary value are the strongest contributors to the Random Forest's predictions. In Logistic Regression, the positive recency coefficient indicates that longer gaps since the last purchase are associated with higher predicted lapse odds; the negative frequency coefficient indicates that more frequent purchasing is associated with lower lapse odds. The positive monetary coefficient is a conditional model association, not proof of causation.
 
@@ -706,7 +715,7 @@ The refund-agent implementation writes run information and refund-action records
 - `outputs/refund_ledger.jsonl`
 - `state/`
 
-The automated test suite includes checkpoint-resume tests for completed, in-progress, and missing checkpoint states. In addition, a controlled interruption-and-resume demonstration was executed using a unique run ID (`crash-resume-demo-20261122-001`). The run was deliberately interrupted immediately after the second tool checkpoint had been saved.
+The automated test suite includes checkpoint-resume tests for completed, in-progress, and missing checkpoint states. In addition, a controlled interruption-and-resume demonstration was executed using a unique run ID (`CRASH_RESUME_CHECK_001`). The run was deliberately interrupted immediately after the second tool checkpoint had been saved.
 
 | Checkpoint / resume evidence | Observed result |
 |---|---|
