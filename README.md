@@ -576,7 +576,6 @@ Business reading of the top features:
 - **Monetary:** Monetary value is highly important in the Random Forest. In Logistic Regression its coefficient is positive: after accounting for frequency, higher spend is associated with slightly higher lapse odds. Frequency and monetary are correlated, so this is a conditional association, not evidence that spending causes lapse.
 - **Average delivery minutes and cancellation rate:** These rank fourth and fifth in Random Forest importance, so they contribute to predictions. Their direction was not evaluated in this project.
 
-
 **Premium retention list limitation**
 
 The Premium flag is assigned using the Top Value segment from whole-window RFM segmentation. It is applied after prediction to create an illustrative retention list; it is not a model feature. Because this flag uses information from the full observation window, the Premium-filtered retention list is **not a fully leakage-free evaluation**. In the current test set, 40 customers were Premium; the top-10 retention list contained 1 customer who actually lapsed. This list should be treated as a prioritisation example, not as an unbiased measure of model performance.
