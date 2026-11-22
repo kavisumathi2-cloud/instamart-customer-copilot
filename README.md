@@ -63,6 +63,12 @@ pip install -r requirements.txt
 python generate_data.py
 ```
 
+Expected output:
+
+```text
+generated: customers=1200 products=40 orders_raw=13084 tickets=164
+```
+
 ### 4. Inspect and clean the data
 
 Audit the raw data before cleaning, then inspect and clean the datasets.
@@ -80,98 +86,12 @@ python src/cleaning_audit.py
 python src/build_database.py
 python src/check_database.py
 ```
-#### Data Cleaning Rules and Audit Results
-
-The raw datasets are audited before cleaning. The cleaning audit compares the raw and cleaned datasets and records the changes made by each cleaning rule.
-
-#### Raw data audit
-
-The raw orders dataset contains 13,084 rows. The following issues were identified:
-
-| Audit item | Count | Percentage |
-|---|---:|---:|
-| Exact duplicate rows | 119 | 0.91% |
-| Duplicate order-ID groups | 772 | 5.90% |
-| Extra repeated order-ID rows | 775 | 5.92% |
-| Distinct order IDs | 12,309 | 94.08% |
-| Missing order IDs | 0 | 0.00% |
-| Pending order rows | 656 | 5.01% |
-| Non-numeric or missing order amounts | 120 | 0.92% |
-| Negative delivery times | 106 | 0.81% |
-| Blank delivery times | 2,541 | 19.42% |
-
-The 120 invalid amounts are counted across all 13,084 raw rows. The cleaning audit reports 112 because it counts invalid amounts only after the latest record per order ID is selected, so the two counts use different bases.
-
-Percentages use the total raw order-row count (13,084) as the denominator. Duplicate order-ID groups and extra repeated rows are different measures; exact duplicate rows are included within the repeated records and should not be added together.
-
-The raw customers dataset contains 1,200 rows. It has 61 blank ages (5.08%) and 6 ages outside the accepted 10–100 range (0.50%). City and gender values also contain inconsistent spellings and formats.
-
-#### Cleaning rules applied
-
-**Customers**
-- Convert signup_date to datetime during cleaning; invalid dates are represented as missing values. The date is stored in ISO format (YYYY-MM-DD) in the CSV and SQLite database.
-- Normalize city names by trimming whitespace, standardizing capitalization, and mapping known aliases. Distinct city spellings were reduced from 24 to 6, with 346 customer rows changed.
-- Normalize gender values into standard categories. Distinct gender spellings were reduced from 10 to 3, with 950 customer rows changed; missing or unrecognized values are represented as `unknown`.
-- Convert age to numeric, treat missing or out-of-range values as invalid, and impute using the city median followed by the overall median when needed. 67 age values required imputation.
-- Remove duplicate customer IDs while retaining the latest record.
-
-**Products**
-- Remove duplicate product IDs while retaining the latest record. No duplicate product IDs were found.
-
-**Orders**
-- Sort by order timestamp and retain the latest record for each order ID. This reduces 13,084 raw rows to 12,309 unique orders, removing 775 repeated order-ID rows.
-- Retain only completed and cancelled statuses among the latest records. The resulting dataset contains 11,110 completed orders and 1,199 cancelled orders. Although 656 pending rows occur in the raw order history, no pending status remains after selecting the latest record for each order ID.
-- Convert order amounts to numeric. Recover invalid or missing amounts using product price, quantity, and discount; remove unrecoverable amounts. After cleaning, no missing order amounts remain.
-- Replace negative completed-order delivery times with missing values. Impute missing completed delivery times using the product-category median, followed by the overall completed-order median. There were 669 missing and 105 negative completed delivery times before this handling; no missing completed delivery times remain afterward.
-- Set delivery time to missing for cancelled orders because a completed delivery duration does not apply to a cancelled order.
-
-**Tickets**
-- Remove exact duplicate ticket rows. No exact duplicates were found.
-- Replace missing ticket text with an empty string. Four missing text values were handled.
-
-#### Cleaning audit output
-
-Run the cleaning audit with:
-
-```powershell
-python src/cleaning_audit.py
-```
-
-The script saves `outputs/cleaning_rules_audit.csv`, which records the before-and-after counts, the number of records changed or removed, and the reason for each cleaning rule. For city and gender normalization, before-and-after counts represent distinct values, while `records_changed_or_removed` represents the actual number of customer rows whose values changed.
-
-The cleaned datasets contain 1,200 customers, 40 products, 12,309 orders, and 164 tickets. The audit distinguishes changes to field values from records removed; for example, cancelled orders remain in the dataset, but their delivery-time values are set to missing.
-
-
 ### 6. Run SQL analysis
 
 ```powershell
 python src/sql_analysis.py
 python src/run_sql_queries.py
 ```
-#### SQL query results
-
-The SQL analysis includes filtering, aggregation, a three-table join, scalar and derived-table subqueries, a LEFT JOIN, CTEs, and window functions.
-
-| Query | Analysis | Result rows |
-|---|---|---:|
-| Q1 | Customers with completed orders above INR 500 per order and total qualifying spending above INR 8,000 | 30 |
-| Q2 | Completed revenue grouped by city and product category using a three-table join | 30 |
-| Q3 | Products priced above the average product price using a scalar subquery | 11 |
-| Q4 | Customers with no completed orders using a LEFT JOIN | 25 |
-| Q5 | Customers whose completed spending is above the average customer-level completed spending | 550 |
-| Q6 | Highest-spending customer in each city using ranking window functions | 6 |
-| Q7 | Daily completed revenue and cumulative revenue using a CTE and running-total window function | 183 |
-
-**Q6 — Window-function comparison**
-
-The query uses `RANK()`, `DENSE_RANK()`, and `ROW_NUMBER()` to compare ranking behaviour within each city. The highest-spending customer in each city receives rank 1.
-
-- `RANK()` assigns the same rank to tied values and skips subsequent rank numbers.
-- `DENSE_RANK()` assigns the same rank to tied values without skipping the next rank.
-- `ROW_NUMBER()` assigns a unique sequential number to each row. The customer ID is used as a secondary sort key to make the ordering deterministic.
-
-The executed query returned six top-customer rows, one for each city. These results were verified against the SQLite database using `python src/run_sql_queries.py`.
-
 
 ### 7. Run exploratory data analysis (EDA)
 
@@ -190,46 +110,6 @@ The script reads the cleaned datasets from `data/clean/` and saves the following
 - `eda_customer_feature_correlation.csv` — correlations between customer-level features.
 - `eda_outlier_summary.csv` — IQR quartiles, lower and upper fences, outlier counts, and percentages.
 - `eda_business_insights.txt` — summary of revenue, cancellations, city and category performance.
-
-**SQLite and Pandas cross-check**
-
-The script independently calculates city-wise completed order counts, total revenue, and average order value using Pandas and SQLite. It compares the results and raises an assertion if they do not match.
-
-Latest execution result:
-
-```text
-PASS: City-wise completed orders, revenue and average order value match.
-```
-
-**Key EDA findings**
-
-- The cleaned dataset contains 12,309 orders: 11,110 completed and 1,199 cancelled. The cancellation rate is 9.74%.
-- Completed-order revenue is INR 2,998,668.80. Hyderabad has the highest completed revenue at INR 528,589.90.
-- Delhi has the highest completed order count (2,064), while Mumbai has the highest average order value (INR 297.00).
-- Electronics is the highest-revenue product category, contributing INR 1,219,248.10 in completed-order revenue.
-- Average completed orders per customer are 9.26, and average completed spend is INR 2,498.89.
-
-**Correlation interpretation**
-
-- Completed-order quantity and order amount have a weak positive correlation (approximately 0.087).
-- Discount percentage and order amount have a weak negative correlation (approximately -0.095).
-- Customer recency and frequency have a moderate negative correlation (approximately -0.544); recency is measured in days, so lower recency generally indicates more recent activity.
-- `completed_orders` and `frequency` are equivalent measures in this dataset, as are `completed_spend` and `monetary`. Their correlations of 1.0 are expected because these are duplicate or equivalent derived features, not independent discoveries.
-- Correlation indicates association, not causation.
-
-**Outlier analysis**
-
-IQR fences flag 991 order amounts (8.05%), 919 completed delivery times (8.27%), and 33 customer completed-spend values (2.75%). No IQR outliers were detected for quantity or cleaned customer age. These observations are flagged for investigation and are not automatically removed.
-
-**Four business interpretations**
-
-1. **Cancellation performance:** The 9.74% cancellation rate indicates that roughly one in ten cleaned orders was cancelled. Investigate cancellation reasons before deciding on interventions.
-2. **City performance:** Hyderabad leads in completed revenue, Delhi leads in completed order count, and Mumbai leads in average order value. Revenue, volume, and order value should therefore be tracked as separate performance measures.
-3. **Product category performance:** Electronics contributes the highest completed revenue. This makes it a useful category for further analysis of demand, margins, and inventory; revenue alone does not establish profitability.
-4. **Customer behaviour and outliers:** Higher purchase frequency is associated with higher monetary value, while lower recency is associated with higher frequency. The relationship is observational, so it does not prove that increasing order frequency will cause higher spending.
-
-Delivery-time analysis uses completed orders only because cancelled orders do not have an applicable delivery duration. IQR outliers are retained unless a separate data-quality investigation establishes that they are invalid.
-
 
 ### 8. Build customer features and segments
 
@@ -276,26 +156,6 @@ python src/plan_execute_comparison.py
 ```
 
 This comparison runs both workflows against the seven scenarios and writes the results to `outputs/react_vs_plan_execute.csv`. It also appends simulated run and ledger records to the output logs.
-
-#### ReAct vs deterministic Plan-and-Execute results
-
-The recorded comparison produced the following results across all seven scenarios:
-
-| Metric | ReAct agent | Deterministic Plan-and-Execute |
-|---|---:|---:|
-| Expected outcomes matched | 7/7 | 7/7 |
-| Refund amounts matched | 7/7 | 7/7 |
-| Escalation amounts matched | 7/7 | 7/7 |
-| Total model calls | 26 | 0 |
-| Total tool/workflow calls | 19 | 22 |
-
-The ReAct agent uses the offline mock language model to select and execute tools. The Plan-and-Execute implementation uses a predefined Python plan and deterministic conditional logic; it does not use an LLM planner. Its zero model calls therefore reflect its deterministic design, not equivalent general-purpose reasoning capability. In this recorded comparison, both workflows matched all seven expected outcomes and their expected refund and escalation amounts.
-
-The Plan-and-Execute workflow checks observations before continuing. It stops or returns a safe result when an order is missing or not completed, policy retrieval fails, required policy evidence is incomplete, a calculation result is unexpected, or the final action result is unexpected. It selects either refund issuance or human escalation based on the calculation result. An intentional `[LOOP]` test also repeats an identical tool call; the duplicate-call guard detects it and stops safely.
-
-The CSV records six Plan-and-Execute replan events across the seven scenarios. This count includes recorded action-selection and safe-stop events; it should not be interpreted as six dynamically generated replacement plans. The workflow is deterministic and does not demonstrate adaptive LLM planning.
-
-The agent uses synthetic order data and simulated refund actions.
 
 ### 13. Run automated tests
 
@@ -452,6 +312,48 @@ Recorded monetary checkpoints:
 The completed and cancelled counts sum to 12,309 orders. The completed-order amount was verified against the SQLite database.
 
 SQL analysis supports customer-level order counts, spending calculations, status summaries, and customer ranking. Grouping by `customer_id` enables customer-level calculations; sorting spending in descending order identifies high-spending customers.
+
+**SQLite and Pandas cross-check**
+
+The script independently calculates city-wise completed order counts, total revenue, and average order value using Pandas and SQLite. It compares the results and raises an assertion if they do not match.
+
+Latest execution result:
+
+```text
+PASS: City-wise completed orders, revenue and average order value match.
+```
+
+**Key EDA findings**
+
+- The cleaned dataset contains 12,309 orders: 11,110 completed and 1,199 cancelled. The cancellation rate is 9.74%.
+- Completed-order revenue is INR 2,998,668.80. Hyderabad has the highest completed revenue at INR 528,589.90.
+- Delhi has the highest completed order count (2,064), while Mumbai has the highest average order value (INR 297.00).
+- Electronics is the highest-revenue product category, contributing INR 1,219,248.10 in completed-order revenue.
+- Average completed orders per customer are 9.26, and average completed spend is INR 2,498.89.
+
+**Correlation interpretation**
+
+- Completed-order quantity and order amount have a weak positive correlation (approximately 0.087).
+- Discount percentage and order amount have a weak negative correlation (approximately -0.095).
+- Customer recency and frequency have a moderate negative correlation (approximately -0.544); recency is measured in days, so lower recency generally indicates more recent activity.
+- `completed_orders` and `frequency` are equivalent measures in this dataset, as are `completed_spend` and `monetary`. Their correlations of 1.0 are expected because these are duplicate or equivalent derived features, not independent discoveries.
+- Correlation indicates association, not causation.
+
+**Outlier analysis**
+
+IQR fences flag 991 order amounts (8.05%), 919 completed delivery times (8.27%), and 33 customer completed-spend values (2.75%). No IQR outliers were detected for quantity or cleaned customer age. These observations are flagged for investigation and are not automatically removed.
+
+**Four business interpretations**
+
+1. **Cancellation performance:** The 9.74% cancellation rate indicates that roughly one in ten cleaned orders was cancelled. Investigate cancellation reasons before deciding on interventions.
+2. **City performance:** Hyderabad leads in completed revenue, Delhi leads in completed order count, and Mumbai leads in average order value. Revenue, volume, and order value should therefore be tracked as separate performance measures.
+3. **Product category performance:** Electronics contributes the highest completed revenue. This makes it a useful category for further analysis of demand, margins, and inventory; revenue alone does not establish profitability.
+4. **Customer behaviour and outliers:** Higher purchase frequency is associated with higher monetary value, while lower recency is associated with higher frequency. The relationship is observational, so it does not prove that increasing order frequency will cause higher spending.
+
+Delivery-time analysis uses completed orders only because cancelled orders do not have an applicable delivery duration. IQR outliers are retained unless a separate data-quality investigation establishes that they are invalid.
+
+
+
 
 ### Part A outputs
 
@@ -741,6 +643,26 @@ The automated test suite includes checkpoint-resume tests for completed, in-prog
 
 The interruption is reproduced in `tests/test_crash_resume.py`, which raises a simulated crash before the third tool call, then resumes the saved run and asserts that only `calculate_refund` and `issue_refund` execute afterwards and that exactly one refund is written to the ledger.
 The test resumed the same saved run using `resume_agent(run_id)`. It verified that the two completed tool steps were preserved and were not repeated. The final result was `REFUND: INR 58.0 issued.` This demonstrates recovery after a successfully persisted tool checkpoint. It does not establish exactly-once execution if a process crashes in the interval between a tool side effect and its checkpoint write.
+
+#### ReAct vs deterministic Plan-and-Execute results
+
+The recorded comparison produced the following results across all seven scenarios:
+
+| Metric | ReAct agent | Deterministic Plan-and-Execute |
+|---|---:|---:|
+| Expected outcomes matched | 7/7 | 7/7 |
+| Refund amounts matched | 7/7 | 7/7 |
+| Escalation amounts matched | 7/7 | 7/7 |
+| Total model calls | 26 | 0 |
+| Total tool/workflow calls | 19 | 22 |
+
+The ReAct agent uses the offline mock language model to select and execute tools. The Plan-and-Execute implementation uses a predefined Python plan and deterministic conditional logic; it does not use an LLM planner. Its zero model calls therefore reflect its deterministic design, not equivalent general-purpose reasoning capability. In this recorded comparison, both workflows matched all seven expected outcomes and their expected refund and escalation amounts.
+
+The Plan-and-Execute workflow checks observations before continuing. It stops or returns a safe result when an order is missing or not completed, policy retrieval fails, required policy evidence is incomplete, a calculation result is unexpected, or the final action result is unexpected. It selects either refund issuance or human escalation based on the calculation result. An intentional `[LOOP]` test also repeats an identical tool call; the duplicate-call guard detects it and stops safely.
+
+The CSV records six Plan-and-Execute replan events across the seven scenarios. This count includes recorded action-selection and safe-stop events; it should not be interpreted as six dynamically generated replacement plans. The workflow is deterministic and does not demonstrate adaptive LLM planning.
+
+The agent uses synthetic order data and simulated refund actions.
 
 ### Part D outputs
 
