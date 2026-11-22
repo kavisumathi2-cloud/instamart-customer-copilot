@@ -574,7 +574,8 @@ Business reading of the top features:
 - **Frequency:** The negative Logistic Regression coefficient means customers who order more often have lower lapse odds. Frequency is also the most important Random Forest feature.
 - **Recency:** The positive coefficient means a longer gap since the last order is associated with higher lapse odds.
 - **Monetary:** Monetary value is highly important in the Random Forest. In Logistic Regression its coefficient is positive: after accounting for frequency, higher spend is associated with slightly higher lapse odds. Frequency and monetary are correlated, so this is a conditional association, not evidence that spending causes lapse.
-- **Average delivery minutes and cancellation rate:** These rank fourth and fifth in Random Forest importance, so they contribute to predictions. Their direction was not evaluated in this project.
+- **Average delivery minutes:** In Logistic Regression the coefficient is small and positive (+0.08), so longer average delivery times are associated with slightly higher lapse odds. It ranks fourth in Random Forest importance.
+- **Cancellation rate:** In Logistic Regression the coefficient is small and negative (−0.12), so a higher cancellation rate is associated with slightly lower lapse odds in this synthetic dataset. This is the opposite of what might be expected, and the effect is small compared with frequency (−1.70), so it should not be over-interpreted; it may reflect correlation with other features. It ranks fifth in Random Forest importance.
 
 **Premium retention list limitation**
 

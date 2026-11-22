@@ -582,7 +582,13 @@ def main():
     })
 
     print("\nLogistic Regression coefficients:")
-    for feature in ["recency", "frequency", "monetary"]:
+    for feature in [
+        "recency",
+        "frequency",
+        "monetary",
+        "average_delivery_minutes",
+        "cancellation_rate",
+        ]:
         match = coefficient_table[
             coefficient_table["feature"].str.endswith(feature)
         ]
