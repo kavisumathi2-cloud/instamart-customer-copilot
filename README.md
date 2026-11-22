@@ -637,6 +637,8 @@ Few-shot classification achieved 100% accuracy compared with 85.7% for zero-shot
 
 ### Policy retrieval assistant
 
+The policy answer function sends a POLICY ASSISTANT system message and a user message in the CONTEXT / QUESTION format to mock_llm.chat, and returns the answer with its source documents.
+
 The policy assistant retrieves relevant policy text and uses it to answer policy questions. The evaluation checks answerable questions and whether the assistant correctly falls back when the required information is unavailable.
 
 Recorded retrieval configuration:
@@ -670,6 +672,8 @@ Recorded policy thresholds:
 - Higher-value requests require human approval.
 - Missing orders must not be refunded.
 - The agent must stop safely when its limits are reached.
+
+The agent exposes its tools through a TOOLS_SPEC list and a TOOL_MAP dictionary. get_order reads from data/instamart.db using a parameterized query. issue_refund and escalate_to_human append a timestamped record with the tool name to outputs/refund_ledger.jsonl.
 
 All refunds are simulated. No real payment or transfer occurs.
 
