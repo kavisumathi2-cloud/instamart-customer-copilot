@@ -1,6 +1,7 @@
-﻿import unittest
+import unittest
 import json
 import tempfile
+from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -12,6 +13,8 @@ from src.refund_agent import (
     run_refund_agent,
     resume_agent,
     record_refund_ledger,
+    _new_state,
+    _continue_agent,
 )
 
 
@@ -281,6 +284,106 @@ class TestRefundLedger(unittest.TestCase):
             self.assertEqual(first["event_id"], second["event_id"])
             self.assertEqual(records[0]["event_id"], first["event_id"])
             self.assertFalse(records[0]["real_money_transferred"])
+
+
+class TestRefundAgentBudgetSafeguards(unittest.TestCase):
+
+    def run_isolated(self, state):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+
+            with (
+                patch("src.refund_agent.STATE_DIR", root / "state"),
+                patch("src.refund_agent.OUTPUT_DIR", root / "outputs"),
+                patch(
+                    "src.refund_agent.AGENT_RUNS_PATH",
+                    root / "agent_runs.jsonl",
+                ),
+            ):
+                return _continue_agent(state)
+
+    def make_state(self, token_limit=6000, time_limit=10):
+        return _new_state(
+            "Refund request for ORD-110603",
+            "TEST_BUDGET",
+            3,
+            6,
+            token_limit,
+            time_limit,
+            "test-budget-run",
+        )
+
+    def test_zero_time_limit_stops_before_llm_call(self):
+        state = self.make_state(time_limit=0)
+
+        with patch("src.refund_agent.mock_llm.chat") as mock_chat:
+            result = self.run_isolated(state)
+
+        self.assertEqual(result["status"], "FALLBACK_TIMEOUT")
+        self.assertEqual(result["llm_calls"], 0)
+        mock_chat.assert_not_called()
+
+    def test_zero_token_limit_stops_before_llm_call(self):
+        state = self.make_state(token_limit=0)
+
+        with patch("src.refund_agent.mock_llm.chat") as mock_chat:
+            result = self.run_isolated(state)
+
+        self.assertEqual(result["status"], "FALLBACK_TOKEN_LIMIT")
+        self.assertEqual(result["llm_calls"], 0)
+        mock_chat.assert_not_called()
+
+    def test_prompt_estimate_at_limit_stops_before_llm_call(self):
+        state = self.make_state(token_limit=100)
+
+        with (
+            patch("src.refund_agent._token_estimate", return_value=100),
+            patch("src.refund_agent.mock_llm.chat") as mock_chat,
+        ):
+            result = self.run_isolated(state)
+
+        self.assertEqual(result["status"], "FALLBACK_TOKEN_LIMIT")
+        self.assertEqual(result["llm_calls"], 0)
+        mock_chat.assert_not_called()
+
+    def test_actual_response_token_overflow_stops_before_tool(self):
+        state = self.make_state(token_limit=100)
+
+        response = SimpleNamespace(
+            usage=SimpleNamespace(total_tokens=101)
+        )
+
+        with (
+            patch("src.refund_agent._token_estimate", return_value=1),
+            patch(
+                "src.refund_agent.mock_llm.chat",
+                return_value=response,
+            ) as mock_chat,
+            patch("src.refund_agent._agent_tool") as mock_tool,
+        ):
+            result = self.run_isolated(state)
+
+        self.assertEqual(result["status"], "FALLBACK_TOKEN_LIMIT")
+        self.assertEqual(result["llm_calls"], 1)
+        self.assertEqual(result["tokens_used"], 101)
+        mock_chat.assert_called_once()
+        mock_tool.assert_not_called()
+
+    def test_elapsed_time_limit_stops_before_llm_call(self):
+        state = self.make_state(time_limit=5)
+
+        with (
+            patch(
+                "src.refund_agent.time.monotonic",
+                side_effect=[100.0, 105.0],
+            ),
+            patch("src.refund_agent.mock_llm.chat") as mock_chat,
+        ):
+            result = self.run_isolated(state)
+
+        self.assertEqual(result["status"], "FALLBACK_TIMEOUT")
+        self.assertEqual(result["llm_calls"], 0)
+        mock_chat.assert_not_called()
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

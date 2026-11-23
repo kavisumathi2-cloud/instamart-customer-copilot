@@ -159,9 +159,9 @@ This comparison runs both workflows against the seven scenarios and writes the r
 
 ### 13. Run automated tests
 
-Run `python -m pytest -v` from the repository root. The latest verified run completed with **45 passed tests**.
+Run `python -m pytest -v` from the repository root. The latest verified run completed with **50 passed tests**.
 
-The automated suite covers refund request validation, refund safety rules, crash-and-resume behavior including retry after a refund-ledger write but before checkpoint persistence, sequential ledger duplicate prevention, ticket PII redaction and prompt privacy, and Plan-and-Execute workflow safety.
+The automated suite covers refund request validation, refund safety rules, crash-and-resume behavior including retry after a refund-ledger write but before checkpoint persistence, sequential ledger duplicate prevention, refund-agent token and time budget safeguards (including pre-call prompt estimation and post-call token-overflow handling), ticket PII redaction and prompt privacy, and Plan-and-Execute workflow safety.
 
 The Plan-and-Execute tests cover missing order IDs, invalid request windows, missing and cancelled orders, policy retrieval failures, incomplete policy evidence, calculation errors and malformed calculation responses, duplicate tool-call prevention, and unexpected action responses.
 
@@ -646,14 +646,14 @@ S7 loop-protection trace: in the latest code, the repeated-tool-call guard detec
 
 ### Stop-safe budget demonstrations
 
-Two additional runs verified that the agent stops before exceeding its configured limits:
+Two additional runs verified safe stopping at the configured prompt-token and time limits:
 
 | Demonstration | Configuration | Actual status | LLM calls | Tokens used | Steps |
 |---|---|---|---:|---:|---:|
 | Token budget | `token_limit=200`, `time_limit_seconds=10` | `FALLBACK_TOKEN_LIMIT` | 2 | 182 | 2 |
 | Zero time budget | `token_limit=6000`, `time_limit_seconds=0` | `FALLBACK_TIMEOUT` | 0 | 0 | 0 |
 
-For the 200-token test, the agent stopped before making the next LLM call because the estimated next prompt would exceed the remaining budget. It used 182 tokens and did not exceed the configured limit. With a zero-second time limit, it stopped before making any LLM call or executing any tool. Both runs returned safe fallback statuses; neither issued a refund.
+For the 200-token test, the agent used 182 tokens across two LLM calls. The estimated next prompt reached the configured 200-token threshold, so another LLM call was blocked. The prompt estimate is checked before a call; actual response-token usage is accumulated and checked after the call. If an actual response pushes cumulative usage above the limit, that LLM call has already occurred, but any tool call in that response is blocked. Therefore, this is not a strict cap on tokens already consumed by an LLM call. With a zero-second time limit, the agent stopped before making any LLM call or executing any tool. Neither run issued a refund.
 
 
 ### Standard refund demonstration
