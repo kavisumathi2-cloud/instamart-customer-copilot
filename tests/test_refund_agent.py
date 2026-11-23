@@ -1,4 +1,7 @@
-import unittest
+﻿import unittest
+import json
+import tempfile
+from pathlib import Path
 from unittest.mock import patch
 
 from src.refund_agent import (
@@ -7,6 +10,7 @@ from src.refund_agent import (
     issue_refund,
     run_refund_agent,
     resume_agent,
+    record_refund_ledger,
 )
 
 
@@ -199,6 +203,47 @@ class TestRefundAgentResume(unittest.TestCase):
         self.assertEqual(result["steps"], [])
         self.assertEqual(result["llm_calls"], 0)
 
+
+
+class TestRefundLedger(unittest.TestCase):
+
+    def test_duplicate_event_is_recorded_only_once(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            ledger_path = Path(temp_dir) / "refund_ledger.jsonl"
+
+            with patch(
+                "src.refund_agent.REFUND_LEDGER_PATH",
+                ledger_path,
+            ):
+                first = record_refund_ledger(
+                    "issue_refund",
+                    "test-run-001",
+                    "TEST_IDEMPOTENCY",
+                    "ORD-110603",
+                    58,
+                    "simulated_refund_issued",
+                )
+                second = record_refund_ledger(
+                    "issue_refund",
+                    "test-run-001",
+                    "TEST_IDEMPOTENCY",
+                    "ORD-110603",
+                    58,
+                    "simulated_refund_issued",
+                )
+
+            records = [
+                json.loads(line)
+                for line in ledger_path.read_text(
+                    encoding="utf-8"
+                ).splitlines()
+                if line.strip()
+            ]
+
+            self.assertEqual(len(records), 1)
+            self.assertEqual(first["event_id"], second["event_id"])
+            self.assertEqual(records[0]["event_id"], first["event_id"])
+            self.assertFalse(records[0]["real_money_transferred"])
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
