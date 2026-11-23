@@ -307,7 +307,9 @@ def run_plan_execute(message, scenario_id, request_days=3):
 def run_comparison():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    scenarios = pd.read_csv(SCENARIO_PATH).fillna("")
+    scenarios = agent.normalize_scenarios(
+        pd.read_csv(SCENARIO_PATH)
+    ).fillna("")
     comparison = []
 
     for _, row in scenarios.iterrows():

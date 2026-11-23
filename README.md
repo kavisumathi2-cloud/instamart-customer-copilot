@@ -159,7 +159,7 @@ This comparison runs both workflows against the seven scenarios and writes the r
 
 ### 13. Run automated tests
 
-Run `python -m pytest -v` from the repository root. The latest verified run completed with **35 passed tests**.
+Run `python -m pytest -v` from the repository root. The latest verified run completed with **37 passed tests**.
 
 The automated suite covers refund request validation, refund safety rules, crash-and-resume behavior, ticket PII redaction and prompt privacy, and Plan-and-Execute workflow safety.
 

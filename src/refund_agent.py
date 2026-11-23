@@ -1316,6 +1316,39 @@ def resume_agent(run_id):
 # RUN ALL SCENARIOS
 # --------------------------------------------------
 
+def normalize_scenarios(scenarios):
+    """Return scenarios with the escalation-amount column present.
+
+    The supplied generate_data.py writes agent_scenarios.csv without an
+    ``expected_escalated_amount_inr`` column; for an ESCALATE scenario it
+    stores the escalated order amount in ``expected_refund_inr``. When the
+    column is absent, derive it so that no refund is expected for ESCALATE
+    rows and the escalated amount is kept separately.
+    """
+
+    scenarios = scenarios.copy()
+
+    if "expected_escalated_amount_inr" in scenarios.columns:
+        return scenarios
+
+    amounts = pd.to_numeric(
+        scenarios["expected_refund_inr"], errors="coerce"
+    ).fillna(0.0)
+    is_escalation = (
+        scenarios["expected_outcome"].astype(str).str.strip().str.upper()
+        == "ESCALATE"
+    )
+
+    scenarios["expected_escalated_amount_inr"] = amounts.where(
+        is_escalation, 0.0
+    )
+    scenarios["expected_refund_inr"] = amounts.where(
+        ~is_escalation, 0.0
+    )
+
+    return scenarios
+
+
 def run_scenarios():
     """Run scenarios and independently verify refunds and escalations."""
 
@@ -1328,8 +1361,8 @@ def run_scenarios():
             f"Scenario file not found: {scenario_path}"
         )
 
-    scenarios = pd.read_csv(
-        scenario_path
+    scenarios = normalize_scenarios(
+        pd.read_csv(scenario_path)
     ).fillna("")
 
     required_columns = {
