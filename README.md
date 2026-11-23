@@ -159,9 +159,9 @@ This comparison runs both workflows against the seven scenarios and writes the r
 
 ### 13. Run automated tests
 
-Run `python -m pytest -v` from the repository root. The latest verified run completed with **37 passed tests**.
+Run `python -m pytest -v` from the repository root. The latest verified run completed with **45 passed tests**.
 
-The automated suite covers refund request validation, refund safety rules, crash-and-resume behavior, ticket PII redaction and prompt privacy, and Plan-and-Execute workflow safety.
+The automated suite covers refund request validation, refund safety rules, crash-and-resume behavior including retry after a refund-ledger write but before checkpoint persistence, sequential ledger duplicate prevention, ticket PII redaction and prompt privacy, and Plan-and-Execute workflow safety.
 
 The Plan-and-Execute tests cover missing order IDs, invalid request windows, missing and cancelled orders, policy retrieval failures, incomplete policy evidence, calculation errors and malformed calculation responses, duplicate tool-call prevention, and unexpected action responses.
 
@@ -681,8 +681,8 @@ The automated test suite includes checkpoint-resume tests for completed, in-prog
 | Total LLM calls | 5 |
 | Final workflow steps | 4 |
 
-The interruption is reproduced in `tests/test_crash_resume.py`, which raises a simulated crash before the third tool call, then resumes the saved run and asserts that only `calculate_refund` and `issue_refund` execute afterwards and that exactly one refund is written to the ledger.
-The test resumed the same saved run using `resume_agent(run_id)`. It verified that the two completed tool steps were preserved and were not repeated. The final result was `REFUND: INR 58.0 issued.` This demonstrates recovery after a successfully persisted tool checkpoint. It does not establish exactly-once execution if a process crashes in the interval between a tool side effect and its checkpoint write.
+The interruption-before-third-tool scenario is reproduced in `tests/test_crash_resume.py`. It verifies that the saved `get_order` and `search_policy` steps are not repeated after resume, and that the workflow completes with one refund ledger entry.
+A second test simulates a crash immediately after `issue_refund` writes the ledger but before the tool result is checkpointed. On resume, `issue_refund` executes again; the repeated event ID is detected and the existing ledger record is returned instead of appending a duplicate. The test verifies that exactly one ledger entry exists for that run and that `real_money_transferred` is false. This demonstrates sequential ledger-write deduplication across this simulated retry, not exactly-once tool execution or production-grade payment idempotency. Concurrent ledger writes and real payment-gateway side effects are not covered.
 
 #### ReAct vs deterministic Plan-and-Execute results
 
@@ -725,5 +725,5 @@ The agent uses synthetic order data and simulated refund actions.
 - Lapse prediction depends on the observation window, label definition, feature availability, and leakage prevention.
 - The retention list supports prioritisation but does not guarantee future customer behaviour.
 - Refund actions are simulated and must not be connected to real payment systems without production-grade authentication, authorisation, audit, monitoring, and human-approval controls.
-- The controlled crash-resume test covers interruption after a successfully saved checkpoint. A crash between a tool side effect and checkpoint persistence remains a possible duplicate-execution window; production use would require stronger transactional or idempotent side-effect handling.
+- The crash-recovery tests verify resume after a saved checkpoint and sequential duplicate-ledger prevention when a refund tool is retried after its ledger write. The tool can still execute again, concurrent ledger writes are not proven safe, and this does not provide exactly-once real payment execution. Production use would require transactional persistence and payment-provider idempotency.
 - A production implementation would require stronger monitoring, security reviews, policy versioning, data governance, and evaluation on representative real-world data.
