@@ -184,31 +184,33 @@ The raw-data audit identified data-quality issues before cleaning.
 
 **Raw orders audit:**
 
-| Audit check | Count |
-|---|---:|
-| Raw order rows | 13,084 |
-| Exact duplicate rows | 119 |
-| Duplicate order-ID groups | 772 |
-| Extra repeated order-ID rows | 775 |
-| Distinct order IDs | 12,309 |
-| Missing order IDs | 0 |
-| Pending orders | 656 |
-| Invalid, missing, or negative order amounts (raw rows) | 120 |
-| Negative delivery times | 106 |
-| Blank delivery times | 2,541 |
+| Audit check | Count | Percentage |
+|---|---:|---:|
+| Raw order rows | 13,084 | 100.00% |
+| Exact duplicate rows | 119 | 0.91% |
+| Duplicate order-ID groups | 772 | 5.90% |
+| Extra repeated order-ID rows | 775 | 5.92% |
+| Distinct order IDs | 12,309 | 94.08% |
+| Missing order IDs | 0 | 0.00% |
+| Pending orders | 656 | 5.01% |
+| Invalid, missing, or negative order amounts (raw rows) | 120 | 0.92% |
+| Negative delivery times | 106 | 0.81% |
+| Blank delivery times | 2,541 | 19.42% |
 
 After retaining the latest record per order ID, 112 invalid, missing, or negative amounts remained. All 112 were recovered using product price, quantity, and discount; no unrecoverable amount rows remained. The raw count of 120 and latest-record count of 112 refer to different processing stages.
 
 **Raw customers audit:**
 
-| Audit check | Count |
-|---|---:|
-| Raw customer rows | 1,200 |
-| Blank ages | 61 |
-| Ages outside the 10–100 range | 6 |
-| Unique city spellings | 24 |
-| Unique gender spellings | 10 |
-| Blank gender values | 30 |
+| Audit check | Count | Percentage |
+|---|---:|---:|
+| Raw customer rows | 1,200 | 100.00% |
+| Blank ages | 61 | 5.08% |
+| Ages outside the 10–100 range | 6 | 0.50% |
+| Unique city spellings | 24 | n/a |
+| Unique gender spellings | 10 | n/a |
+| Blank gender values | 30 | 2.50% |
+
+Percentages use the raw row count of each table as the denominator (13,084 orders and 1,200 customers).
 
 **Original raw city spellings and frequencies:**
 
@@ -273,23 +275,25 @@ The order audit distinguishes duplicate order-ID groups (772) from extra repeate
 
 The counts below are rule-specific: `before_count` is the number of affected records before that rule, and `after_count` is the number remaining after it. These are not total dataset row counts.
 
-| Dataset | Cleaning rule | Before | After |
-|---|---|---:|---:|
-| Customers | Age validation and median imputation | 67 | 0 |
-| Customers | Signup date conversion | 0 | 0 |
-| Customers | City name normalization | 24 | 6 |
-| Customers | Gender normalization | 10 | 3 |
-| Customers | Duplicate customer ID removal | 0 | 0 |
-| Products | Duplicate product ID removal | 0 | 0 |
-| Orders | Keep latest record per order ID | 775 | 0 |
-| Orders | Final status filtering | 0 | 0 |
-| Orders | Raw pending records absent after latest-record selection | 656 | 0 |
-| Orders | Invalid order amounts recovered | 112 | 0 |
-| Orders | Unrecoverable order amounts removed | 0 | 0 |
-| Orders | Completed delivery time handling | 774 | 0 |
-| Orders | Cancelled delivery time | 1,199 | 0 |
-| Tickets | Exact duplicate row removal | 0 | 0 |
-| Tickets | Missing ticket text handling | 4 | 0 |
+| Dataset | Cleaning rule | Before | After | Records changed or removed |
+|---|---|---:|---:|---:|
+| Customers | Age validation and median imputation | 67 | 0 | 67 |
+| Customers | Signup date conversion | 0 | 0 | 0 |
+| Customers | City name normalization | 24 | 6 | 346 |
+| Customers | Gender normalization | 10 | 3 | 950 |
+| Customers | Duplicate customer ID removal | 0 | 0 | 0 |
+| Products | Duplicate product ID removal | 0 | 0 | 0 |
+| Orders | Keep latest record per order ID | 775 | 0 | 775 |
+| Orders | Final status filtering | 0 | 0 | 0 |
+| Orders | Raw pending records absent after latest-record selection | 656 | 0 | 656 |
+| Orders | Invalid order amounts recovered | 112 | 0 | 112 |
+| Orders | Unrecoverable order amounts removed | 0 | 0 | 0 |
+| Orders | Completed delivery time handling | 774 | 0 | 774 |
+| Orders | Cancelled delivery time | 1,199 | 0 | 1,199 |
+| Tickets | Exact duplicate row removal | 0 | 0 | 0 |
+| Tickets | Missing ticket text handling | 4 | 0 | 4 |
+
+For city and gender normalization, Before and After count distinct spellings, while Records changed or removed counts the customer rows whose values were actually changed (346 and 950).
 
 Signup dates are parsed with `pandas.to_datetime(errors="coerce")`; invalid values would become missing dates. The audit reports zero invalid dates before and after conversion. SQLite stores the resulting dates as ISO-formatted text, because SQLite does not have a dedicated native DATETIME storage type.
 
