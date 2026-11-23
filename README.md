@@ -581,7 +581,7 @@ Few-shot classification achieved 100% accuracy compared with 85.7% for zero-shot
 
 ### Policy retrieval assistant
 
-The policy answer function sends a POLICY ASSISTANT system message and a user message in the CONTEXT / QUESTION format to mock_llm.chat, and returns the answer with its source documents.
+The policy answer function sends a `POLICY ASSISTANT` system message and a user message in the `CONTEXT` / `QUESTION` format to `mock_llm.chat`, and returns the answer with its source documents.
 
 The policy assistant retrieves relevant policy text and uses it to answer policy questions. The evaluation checks answerable questions and whether the assistant correctly falls back when the required information is unavailable.
 
@@ -617,7 +617,7 @@ Recorded policy thresholds:
 - Missing orders must not be refunded.
 - The agent must stop safely when its limits are reached.
 
-The agent exposes its tools through a TOOLS_SPEC list and a TOOL_MAP dictionary. get_order reads from data/instamart.db using a parameterized query. issue_refund and escalate_to_human write a ledger record containing an event ID, UTC timestamp, tool name, run ID, scenario ID, order ID, refund amount, status, and a flag confirming that no real money was transferred. Before writing, the function checks whether the same event ID already exists and returns the existing record instead of appending a duplicate. The existing ledger also contains 26 legacy records written before these fields were introduced.
+The agent exposes its tools through a `TOOLS_SPEC` list and a `TOOL_MAP` dictionary. `get_order` reads from `data/instamart.db` using a parameterized query. `issue_refund` and `escalate_to_human` write a ledger record containing an event ID, UTC timestamp, tool name, run ID, scenario ID, order ID, refund amount, status, and a flag confirming that no real money was transferred. Before writing, the function checks whether the same event ID already exists and returns the existing record instead of appending a duplicate. The existing ledger also contains 26 legacy records written before these fields were introduced.
 
 All refunds are simulated. No real payment or transfer occurs.
 
