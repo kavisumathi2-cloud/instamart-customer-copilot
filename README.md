@@ -268,6 +268,34 @@ The raw city values contain capitalization and leading-whitespace variants of si
 
 The order audit distinguishes duplicate order-ID groups (772) from extra repeated order-ID rows (775). The cleaning audit confirms that the cleaned order dataset contains no duplicate IDs.
 
+
+**Rule-by-rule cleaning results**
+
+The counts below are rule-specific: `before_count` is the number of affected records before that rule, and `after_count` is the number remaining after it. These are not total dataset row counts.
+
+| Dataset | Cleaning rule | Before | After |
+|---|---|---:|---:|
+| Customers | Age validation and median imputation | 67 | 0 |
+| Customers | Signup date conversion | 0 | 0 |
+| Customers | City name normalization | 24 | 6 |
+| Customers | Gender normalization | 10 | 3 |
+| Customers | Duplicate customer ID removal | 0 | 0 |
+| Products | Duplicate product ID removal | 0 | 0 |
+| Orders | Keep latest record per order ID | 775 | 0 |
+| Orders | Final status filtering | 0 | 0 |
+| Orders | Raw pending records absent after latest-record selection | 656 | 0 |
+| Orders | Invalid order amounts recovered | 112 | 0 |
+| Orders | Unrecoverable order amounts removed | 0 | 0 |
+| Orders | Completed delivery time handling | 774 | 0 |
+| Orders | Cancelled delivery time | 1,199 | 0 |
+| Tickets | Exact duplicate row removal | 0 | 0 |
+| Tickets | Missing ticket text handling | 4 | 0 |
+
+Signup dates are parsed with `pandas.to_datetime(errors="coerce")`; invalid values would become missing dates. The audit reports zero invalid dates before and after conversion. SQLite stores the resulting dates as ISO-formatted text, because SQLite does not have a dedicated native DATETIME storage type.
+
+Cancelled orders have no completed delivery duration, so their delivery-time values are handled separately and are not treated as missing completed-delivery measurements.
+
+
 Recorded database checkpoints:
 
 | Check | Result |
