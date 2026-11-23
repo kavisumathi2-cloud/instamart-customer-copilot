@@ -536,7 +536,7 @@ The saved model was reloaded and its predictions matched the original model's pr
 
 ### Privacy-aware ticket preparation
 
-The ticket-triage pipeline redacts personally identifiable information before classification. Before each model call, explicit privacy assertions inspect both the system and user prompt messages and reject the call if any supported email-address, phone-number, or order-ID patterns remain. An additional assertion checks the redacted ticket text during triage. The pipeline also validates model responses, applies fallback handling where necessary, and enforces token-budget controls.
+The ticket-triage pipeline redacts personally identifiable information before classification. Before each model call, explicit privacy assertions inspect both the system and user prompt messages and reject the call if any supported email-address, phone-number, or order-ID patterns remain. An additional assertion checks the redacted ticket text during triage. The pipeline also validates model responses, applies fallback handling where necessary, and uses estimated-token pre-call checks to limit model calls under a configured token budget. Actual model usage may differ from the estimate, so this is not a strict hard cap.
 
 Recorded PII redaction counts before replacement:
 
@@ -570,12 +570,17 @@ The output also records 9 tickets with invalid model outputs. These were routed 
 The four long tickets (T0161, T0162, T0163 and T0164) were each estimated at 734 tokens after PII redaction, for a combined estimated 2,936 tokens. Each exceeded the 400-token ticket limit and was routed to human review without being sent to the language model. These four tickets therefore used zero model tokens.
 
 
-Few-shot classification achieved 100% accuracy compared with 85.7% for zero-shot classification across the 147 classified tickets. It consumed 22,660 tokens (154.15 per classified ticket), compared with 11,584 tokens (78.80 per ticket) for zero-shot, approximately 95.6% more tokens per ticket. The additional cost can be justified for ambiguous or high-impact tickets, such as fraud-related cases, when incorrect routing could delay critical support and the token budget allows it. Zero-shot is more economical for routine, lower-risk tickets or strict token budgets; a practical system can reserve few-shot prompting for uncertain or high-risk cases. The separate budget demonstration enforces a 6,000-token limit, classifying 76 tickets and marking 76 as budget-exhausted.
+Few-shot classification achieved 100% accuracy compared with 85.7% for zero-shot classification across the 147 classified tickets. It consumed 22,660 tokens (154.15 per classified ticket), compared with 11,584 tokens (78.80 per ticket) for zero-shot, approximately 95.6% more tokens per ticket. The additional cost can be justified for ambiguous or high-impact tickets, such as fraud-related cases, when incorrect routing could delay critical support and the token budget allows it. Zero-shot is more economical for routine, lower-risk tickets or strict token budgets; a practical system can reserve few-shot prompting for uncertain or high-risk cases. The separate budget demonstration uses a 6,000-token estimated-budget threshold. It classified 76 tickets and marked 76 as budget-exhausted. Because the pre-call check uses estimated prompt tokens, actual model token usage is not guaranteed to remain below the threshold.
 
 ### Part C outputs
 
 - `outputs/triage_results.csv`
+- `outputs/tickets_redacted.csv`
+- `outputs/triage_zero_shot.csv`
+- `outputs/triage_few_shot.csv`
 - `outputs/triage_budget_demo.csv`
+- `outputs/triage_confusion_zero_shot.csv`
+- `outputs/ticket_triage_summary.json`
 
 ## Part D
 
