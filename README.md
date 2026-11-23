@@ -590,9 +590,9 @@ Recorded retrieval configuration:
 | Setting | Value |
 |---|---:|
 | Policy documents | 5 |
-| Chunks | 15 |
-| Chunk size | 40 words |
-| Chunk overlap | 10 words |
+| Chunks with overlap | 11 |
+| Chunk size | 60 words |
+| Chunk overlap | 15 words |
 | Top-k retrieval | 5 |
 | Evaluation questions | 14 |
 | Answerable questions passed | 12 of 12 |
@@ -602,7 +602,7 @@ The recorded evaluation passed all 14 questions: 12 answerable questions and two
 
 **Chunk overlap comparison**
 
-In the recorded retrieval comparison, the 10-word-overlap configuration with top-k=3 did not retrieve all three required late-delivery conditions. Top-k=5 and top-k=8 retrieved all conditions. The no-overlap configurations also retrieved all conditions at top-k values of 3, 5, and 8. Therefore, chunk overlap alone did not guarantee better retrieval in this experiment.
+The comparison evaluated 15-word overlap and no-overlap configurations at top-k values of 3, 5, and 8. Both configurations retrieved the completed-order condition at all tested top-k values. In this experiment, the results do not establish that adding overlap improves retrieval performance.
 
 ### Refund-agent policy and guardrails
 
