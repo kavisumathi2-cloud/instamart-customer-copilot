@@ -8,6 +8,7 @@ from src.refund_agent import (
     validate_request_days,
     calculate_refund,
     issue_refund,
+    escalate_to_human,
     run_refund_agent,
     resume_agent,
     record_refund_ledger,
@@ -101,6 +102,42 @@ class TestRefundSafetyRules(unittest.TestCase):
         self.assertEqual(result["steps"], [])
         self.assertEqual(result["step_count"], 0)
 
+
+
+class TestHumanEscalation(unittest.TestCase):
+
+    def test_valid_high_value_refund_is_escalated(self):
+        result = escalate_to_human(
+            "ORD-107652",
+            2598.0,
+            request_days=3,
+        )
+
+        self.assertTrue(result["escalated"])
+        self.assertEqual(result["order_id"], "ORD-107652")
+        self.assertEqual(result["refund_inr"], 2598.0)
+        self.assertFalse(result["ledger_recorded"])
+        self.assertIn("review", result["message"].lower())
+
+    def test_incorrect_refund_amount_is_rejected(self):
+        result = escalate_to_human(
+            "ORD-107652",
+            2000.0,
+            request_days=3,
+        )
+
+        self.assertIn("error", result)
+        self.assertIn("verification", result["error"].lower())
+
+    def test_eight_day_escalation_request_is_rejected(self):
+        result = escalate_to_human(
+            "ORD-107652",
+            2598.0,
+            request_days=8,
+        )
+
+        self.assertIn("error", result)
+        self.assertIn("7 days", result["error"])
 
 class TestRefundAgentResume(unittest.TestCase):
 
