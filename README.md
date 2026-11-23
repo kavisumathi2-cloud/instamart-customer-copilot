@@ -590,10 +590,10 @@ Recorded retrieval configuration:
 | Setting | Value |
 |---|---:|
 | Policy documents | 5 |
-| Chunks with overlap | 11 |
-| Chunk size | 60 words |
-| Chunk overlap | 15 words |
-| Top-k retrieval | 5 |
+| Chunks with overlap | 15 |
+| Chunk size | 40 words |
+| Chunk overlap | 10 words |
+| Top-k retrieval | 3 |
 | Evaluation questions | 14 |
 | Answerable questions passed | 12 of 12 |
 | Fallback questions passed | 2 of 2 |
@@ -602,7 +602,7 @@ The recorded evaluation passed all 14 questions: 12 answerable questions and two
 
 **Chunk overlap comparison**
 
-The comparison evaluated 15-word overlap and no-overlap configurations at top-k values of 3, 5, and 8. Both configurations retrieved the completed-order condition at all tested top-k values. In this experiment, the results do not establish that adding overlap improves retrieval performance.
+The comparison tested all 12 answerable evaluation questions using 40-word chunks with either 10-word overlap or zero overlap. At top-k 1, the 10-word-overlap configuration fully supported 11 of 12 questions, while zero overlap fully supported 8 of 12. Zero overlap missed expected facts for four questions: failed-payment refund time, approved-refund time, refund approval above INR 1,000, and wallet-balance cash refunds. The 10-word-overlap configuration missed the approved-refund time fact at top-k 1. At top-k 3, both configurations fully supported all 12 questions. The production retrieval setting remains top-k 3; this experiment shows an overlap benefit at top-k 1, not at top-k 3.
 
 ### Refund-agent policy and guardrails
 

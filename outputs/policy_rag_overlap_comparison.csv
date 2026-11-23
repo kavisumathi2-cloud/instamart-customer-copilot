@@ -1,7 +1,9 @@
-strategy,top_k,chunk_count,retrieved_chunk_count,completed_order_condition_found,45_minute_condition_found,7_day_condition_found,all_conditions_retrieved
-overlap_15,3,11,3,True,True,True,True
-overlap_15,5,11,5,True,True,True,True
-overlap_15,8,11,5,True,True,True,True
-no_overlap,3,10,3,True,True,True,True
-no_overlap,5,10,4,True,True,True,True
-no_overlap,8,10,4,True,True,True,True
+strategy,top_k,chunk_count,answerable_questions_tested,document_retrieval_hits,expected_facts_retrieved,fully_supported_questions,failed_question_count,failed_questions
+overlap_10,1,15,12,12,10,10,2,When is a late delivery refund allowed?; How long does an approved refund take?
+overlap_10,3,15,12,12,12,12,0,
+overlap_10,5,15,12,12,12,12,0,
+overlap_10,8,15,12,12,12,12,0,
+no_overlap,1,13,12,12,8,8,4,How long does a failed payment refund take?; How long does an approved refund take?; Who must approve a refund above INR 1000?; Can wallet balance be refunded as cash?
+no_overlap,3,13,12,12,12,12,0,
+no_overlap,5,13,12,12,12,12,0,
+no_overlap,8,13,12,12,12,12,0,

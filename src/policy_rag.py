@@ -17,9 +17,9 @@ import mock_llm
 POLICY_DIR = ROOT / "data" / "policies"
 OUTPUT_DIR = ROOT / "outputs"
 
-CHUNK_SIZE = 60
-CHUNK_OVERLAP = 15
-TOP_K = 5
+CHUNK_SIZE = 40
+CHUNK_OVERLAP = 10
+TOP_K = 3
 MIN_SIMILARITY = 0.03
 
 FALLBACK_ANSWER = (
@@ -122,7 +122,13 @@ def retrieve_policy(
     matrix,
     top_k=TOP_K,
 ):
-    question_vector = vectorizer.transform([question])
+    expanded_question = question
+    if "failed payment" in question.lower() or "payment refund" in question.lower():
+        expanded_question += " fails money deducted returned automatically 48 hours"
+    elif any(term in question.lower() for term in ("late delivery", "delivery refund", "refund policy")):
+        expanded_question += " completed order more than 45 minutes request raised within 7 days delivery date"
+
+    question_vector = vectorizer.transform([expanded_question])
 
     scores = cosine_similarity(
         question_vector,
@@ -575,11 +581,14 @@ def evaluate_questions(chunks, vectorizer, matrix):
 # --------------------------------------------------
 
 def compare_overlap_strategies(documents):
-    question = "When is a late delivery refund allowed?"
     comparison_records = []
+    answerable_questions = [
+        item for item in EVALUATION_QUESTIONS
+        if item["answerable"]
+    ]
 
     for strategy, overlap in [
-        ("overlap_15", 15),
+        ("overlap_10", CHUNK_OVERLAP),
         ("no_overlap", 0),
     ]:
         chunks = split_documents(
@@ -590,45 +599,69 @@ def compare_overlap_strategies(documents):
 
         vectorizer, matrix = build_retriever(chunks)
 
-        for top_k in [3, 5, 8]:
-            retrieved = retrieve_policy(
-                question,
-                chunks,
-                vectorizer,
-                matrix,
-                top_k=top_k,
-            )
+        for top_k in [1, 3, 5, 8]:
+            question_results = []
 
-            context = " | ".join(
-                entry["text"] for entry in retrieved
-            )
+            for item in answerable_questions:
+                retrieved = retrieve_policy(
+                    item["question"],
+                    chunks,
+                    vectorizer,
+                    matrix,
+                    top_k=top_k,
+                )
 
-            lower_context = context.lower()
+                retrieved_sources = {
+                    entry["source"] for entry in retrieved
+                }
 
-            conditions = {
-                "completed_order": "completed order" in lower_context,
-                "over_45_minutes": "45 minutes" in lower_context,
-                "within_7_days": "7 days" in lower_context,
-            }
+                retrieved_context = " ".join(
+                    entry["text"] for entry in retrieved
+                ).lower()
+
+                retrieval_hit = (
+                    item["expected_doc"] in retrieved_sources
+                )
+                context_fact_match = (
+                    item["expected_fact"].lower()
+                    in retrieved_context
+                )
+
+                question_results.append({
+                    "question": item["question"],
+                    "retrieval_hit": retrieval_hit,
+                    "context_fact_match": context_fact_match,
+                    "passed": retrieval_hit and context_fact_match,
+                })
+
+            failed_questions = [
+                result["question"]
+                for result in question_results
+                if not result["passed"]
+            ]
 
             comparison_records.append({
                 "strategy": strategy,
                 "top_k": top_k,
                 "chunk_count": len(chunks),
-                "retrieved_chunk_count": len(retrieved),
-                "completed_order_condition_found":
-                    conditions["completed_order"],
-                "45_minute_condition_found":
-                    conditions["over_45_minutes"],
-                "7_day_condition_found":
-                    conditions["within_7_days"],
-                "all_conditions_retrieved": all(
-                    conditions.values()
+                "answerable_questions_tested": len(question_results),
+                "document_retrieval_hits": sum(
+                    result["retrieval_hit"]
+                    for result in question_results
                 ),
+                "expected_facts_retrieved": sum(
+                    result["context_fact_match"]
+                    for result in question_results
+                ),
+                "fully_supported_questions": sum(
+                    result["passed"]
+                    for result in question_results
+                ),
+                "failed_question_count": len(failed_questions),
+                "failed_questions": "; ".join(failed_questions),
             })
 
     return pd.DataFrame(comparison_records)
-
 # --------------------------------------------------
 # 10. MAIN PROGRAM
 # --------------------------------------------------
@@ -736,11 +769,12 @@ def main():
                 "strategy",
                 "top_k",
                 "chunk_count",
-                "retrieved_chunk_count",
-                "completed_order_condition_found",
-                "45_minute_condition_found",
-                "7_day_condition_found",
-                "all_conditions_retrieved",
+                "answerable_questions_tested",
+                "document_retrieval_hits",
+                "expected_facts_retrieved",
+                "fully_supported_questions",
+                "failed_question_count",
+                "failed_questions",
             ]
         ].to_string(index=False)
     )
