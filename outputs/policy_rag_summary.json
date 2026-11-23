@@ -1,8 +1,8 @@
 {
   "documents_loaded": 5,
-  "chunks_with_overlap": 15,
-  "chunk_size_words": 40,
-  "overlap_words": 10,
+  "chunks_with_overlap": 11,
+  "chunk_size_words": 60,
+  "overlap_words": 15,
   "top_k": 5,
   "evaluation_questions": 14,
   "answerable_questions": 12,

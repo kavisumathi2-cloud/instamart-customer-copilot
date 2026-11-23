@@ -1,9 +1,7 @@
-
 import json
 import re
 import sys
 from pathlib import Path
-
 
 import pandas as pd
 from sklearn.feature_extraction.text import (
@@ -19,8 +17,8 @@ import mock_llm
 POLICY_DIR = ROOT / "data" / "policies"
 OUTPUT_DIR = ROOT / "outputs"
 
-CHUNK_SIZE = 40
-CHUNK_OVERLAP = 10
+CHUNK_SIZE = 60
+CHUNK_OVERLAP = 15
 TOP_K = 5
 MIN_SIMILARITY = 0.03
 
@@ -93,6 +91,7 @@ def split_documents(
                 break
 
     return chunks
+
 
 # --------------------------------------------------
 # 3. BUILD TF-IDF RETRIEVER
@@ -310,8 +309,6 @@ def apply_policy_rules(question):
 # 6. ANSWER A POLICY QUESTION
 # --------------------------------------------------
 
-
-
 def answer_question(question, chunks, vectorizer, matrix):
     retrieved = retrieve_policy(
         question,
@@ -323,8 +320,23 @@ def answer_question(question, chunks, vectorizer, matrix):
 
     rule_answer, rule_source = apply_policy_rules(question)
 
+    # A rule-based answer must have its supporting policy
+    # document in the retrieved context.
+    if rule_answer and not any(
+        item["source"] == rule_source
+        for item in retrieved
+    ):
+        return {
+            "answer": FALLBACK_ANSWER,
+            "sources": [],
+            "retrieved": [],
+            "method": "missing_rule_source",
+        }
+
     # Reject unrelated questions unless a known policy rule matches.
-    if not rule_answer and not has_relevant_query_terms(question, retrieved):
+    if not rule_answer and not has_relevant_query_terms(
+        question, retrieved
+    ):
         return {
             "answer": FALLBACK_ANSWER,
             "sources": [],
@@ -366,12 +378,9 @@ def answer_question(question, chunks, vectorizer, matrix):
     llm_answer = response.choices[0].message.content
 
     # Prefer the verified policy rule when one matches.
-    # The POLICY ASSISTANT call above is still executed for
-    # every answerable question, as required by the RAG workflow.
+    # The POLICY ASSISTANT call is still executed for every
+    # answerable question as required by the RAG workflow.
     if rule_answer:
-        if rule_source not in sources:
-            sources.append(rule_source)
-
         return {
             "answer": rule_answer,
             "sources": sorted(sources),
@@ -479,6 +488,10 @@ EVALUATION_QUESTIONS = [
 ]
 
 
+# --------------------------------------------------
+# 8. EVALUATE POLICY QUESTIONS
+# --------------------------------------------------
+
 def evaluate_questions(chunks, vectorizer, matrix):
     records = []
 
@@ -491,8 +504,23 @@ def evaluate_questions(chunks, vectorizer, matrix):
         )
 
         if item["answerable"]:
+            retrieved_sources = {
+                entry["source"]
+                for entry in result["retrieved"]
+            }
+
             retrieval_hit = (
-                item["expected_doc"] in result["sources"]
+                item["expected_doc"] in retrieved_sources
+            )
+
+            retrieved_context = " ".join(
+                entry["text"]
+                for entry in result["retrieved"]
+            ).lower()
+
+            context_fact_match = (
+                item["expected_fact"].lower()
+                in retrieved_context
             )
 
             fact_match = (
@@ -501,10 +529,16 @@ def evaluate_questions(chunks, vectorizer, matrix):
             )
 
             fallback_correct = None
-            passed = retrieval_hit and fact_match
+
+            passed = (
+                retrieval_hit
+                and context_fact_match
+                and fact_match
+            )
 
         else:
             retrieval_hit = None
+            context_fact_match = None
             fact_match = None
 
             fallback_correct = (
@@ -523,9 +557,11 @@ def evaluate_questions(chunks, vectorizer, matrix):
             "sources": ";".join(result["sources"]),
             "answer_method": result["method"],
             "retrieved_context": " | ".join(
-                entry["text"] for entry in result["retrieved"]
+                entry["text"]
+                for entry in result["retrieved"]
             ),
             "retrieval_hit": retrieval_hit,
+            "context_fact_match": context_fact_match,
             "fact_match": fact_match,
             "fallback_correct": fallback_correct,
             "passed": passed,
@@ -535,7 +571,7 @@ def evaluate_questions(chunks, vectorizer, matrix):
 
 
 # --------------------------------------------------
-# 8. COMPARE CHUNK OVERLAP STRATEGIES
+# 9. COMPARE CHUNK OVERLAP STRATEGIES
 # --------------------------------------------------
 
 def compare_overlap_strategies(documents):
@@ -543,7 +579,7 @@ def compare_overlap_strategies(documents):
     comparison_records = []
 
     for strategy, overlap in [
-        ("overlap_10", 10),
+        ("overlap_15", 15),
         ("no_overlap", 0),
     ]:
         chunks = split_documents(
@@ -593,9 +629,8 @@ def compare_overlap_strategies(documents):
 
     return pd.DataFrame(comparison_records)
 
-
 # --------------------------------------------------
-# 9. MAIN PROGRAM
+# 10. MAIN PROGRAM
 # --------------------------------------------------
 
 def main():
