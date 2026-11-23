@@ -637,7 +637,7 @@ The latest scenario run passed all seven expected outcome, refund amount, escala
 
 Validation summary: outcome matches 7/7, refund matches 7/7, escalation matches 7/7, and ledger matches 7/7. The scenario evaluation normalizes fallback statuses to the `FALLBACK` outcome category.
 
-S7 loop-protection trace: the actual agent status was `FALLBACK_MAX_ITERATIONS`. The agent executed six repeated `search_policy` tool actions, made 6 LLM calls, used 1,296 tokens, and stopped with `Stopped safely after 6 iterations.` No refund was issued. This confirms the maximum-iteration safeguard prevents an uncontrolled tool loop. All refund actions are simulated; no real money is transferred.
+S7 loop-protection trace: in the latest code, the repeated-tool-call guard detects the second identical `search_policy` request before executing it, so S7 stops with status `FALLBACK` after 2 LLM calls (290 tokens) and the message `Stopped safely because the agent repeated the same tool call without making progress.` No refund is issued. Earlier recorded S7 runs in `outputs/agent_runs.jsonl`, made before this guard was added, ran six repeated `search_policy` actions and ended with `FALLBACK_MAX_ITERATIONS` after 6 LLM calls (1,296 tokens). The maximum-iteration limit of six remains as a second safeguard if repeated calls vary. All refund actions are simulated; no real money is transferred.
 
 ### Stop-safe budget demonstrations
 
