@@ -15,6 +15,7 @@ from src.refund_agent import (
     record_refund_ledger,
     _new_state,
     _continue_agent,
+    _scenario_ledger_matches,
 )
 
 
@@ -438,3 +439,42 @@ class TestRefundAgentBudgetSafeguards(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestScenarioLedgerValidation(unittest.TestCase):
+
+    def make_record(self):
+        return {
+            "status": "simulated_refund_issued",
+            "refund_inr": 58.0,
+            "real_money_transferred": False,
+            "event_id": "run-001:issue_refund:ORD-110603",
+            "timestamp": "2026-11-24T10:00:00+00:00",
+            "tool_name": "issue_refund",
+        }
+
+    def test_complete_ledger_record_matches(self):
+        self.assertTrue(
+            _scenario_ledger_matches(
+                [self.make_record()],
+                "simulated_refund_issued",
+                58.0,
+            )
+        )
+
+    def test_missing_timestamp_does_not_match(self):
+        record = self.make_record()
+        record.pop("timestamp")
+
+        self.assertFalse(
+            _scenario_ledger_matches(
+                [record],
+                "simulated_refund_issued",
+                58.0,
+            )
+        )
+
+    def test_no_ledger_record_matches_denied_scenario(self):
+        self.assertTrue(
+            _scenario_ledger_matches([], None, 0.0)
+        )

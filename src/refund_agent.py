@@ -1362,6 +1362,43 @@ def normalize_scenarios(scenarios):
     return scenarios
 
 
+def _scenario_ledger_matches(
+    scenario_ledger,
+    expected_status,
+    expected_amount,
+):
+    """Validate the ledger evidence for one refund scenario."""
+    if expected_status is None:
+        return len(scenario_ledger) == 0
+
+    if len(scenario_ledger) != 1:
+        return False
+
+    record = scenario_ledger[0]
+
+    try:
+        actual_amount = float(record.get("refund_inr", 0))
+    except (TypeError, ValueError):
+        return False
+
+    return (
+        record.get("status") == expected_status
+        and math.isclose(
+            actual_amount,
+            expected_amount,
+            rel_tol=0,
+            abs_tol=0.01,
+        )
+        and record.get("real_money_transferred") is False
+        and bool(record.get("event_id"))
+        and bool(record.get("timestamp"))
+        and record.get("tool_name") in (
+            "issue_refund",
+            "escalate_to_human",
+        )
+    )
+
+
 def run_scenarios():
     """Run scenarios and independently verify refunds and escalations."""
 
@@ -1457,25 +1494,11 @@ def run_scenarios():
             expected_ledger_status = None
             expected_ledger_amount = 0.0
 
-        if expected_ledger_status is None:
-            ledger_match = len(scenario_ledger) == 0
-        else:
-            ledger_match = (
-                len(scenario_ledger) == 1
-                and scenario_ledger[0].get("status") == expected_ledger_status
-                and math.isclose(
-                    float(scenario_ledger[0].get("refund_inr", 0)),
-                    expected_ledger_amount,
-                    rel_tol=0,
-                    abs_tol=0.01,
-                )
-                and scenario_ledger[0].get("real_money_transferred") is False
-                and bool(scenario_ledger[0].get("event_id"))
-                and scenario_ledger[0].get("tool_name") in (
-                    "issue_refund",
-                    "escalate_to_human",
-                )
-            )
+        ledger_match = _scenario_ledger_matches(
+            scenario_ledger,
+            expected_ledger_status,
+            expected_ledger_amount,
+        )
 
         for step in result.get("steps", []):
             observation = step.get("observation", {})
