@@ -385,5 +385,56 @@ class TestRefundAgentBudgetSafeguards(unittest.TestCase):
         self.assertEqual(result["llm_calls"], 0)
         mock_chat.assert_not_called()
 
+    def test_tool_exception_stops_safely_and_saves_checkpoint(self):
+        state = self.make_state()
+
+        tool_call = SimpleNamespace(
+            id="tool-call-001",
+            name="get_order",
+            arguments='{"order_id": "ORD-110603"}',
+        )
+
+        message = SimpleNamespace(
+            content=None,
+            tool_calls=[tool_call],
+        )
+
+        response = SimpleNamespace(
+            usage=SimpleNamespace(total_tokens=10),
+            choices=[SimpleNamespace(message=message)],
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+
+            with (
+                patch("src.refund_agent.STATE_DIR", root / "state"),
+                patch("src.refund_agent.OUTPUT_DIR", root / "outputs"),
+                patch(
+                    "src.refund_agent.AGENT_RUNS_PATH",
+                    root / "agent_runs.jsonl",
+                ),
+                patch(
+                    "src.refund_agent.mock_llm.chat",
+                    return_value=response,
+                ),
+                patch(
+                    "src.refund_agent._agent_tool",
+                    side_effect=RuntimeError("Simulated tool failure"),
+                ),
+            ):
+                result = _continue_agent(state)
+
+                self.assertEqual(result["status"], "FALLBACK_TOOL_ERROR")
+                self.assertIn(
+                    "Simulated tool failure",
+                    result["final_answer"],
+                )
+                self.assertEqual(result["step_count"], 0)
+                self.assertFalse(result["ledger_recorded"])
+                self.assertTrue(
+                    Path(result["checkpoint_path"]).exists()
+                )
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -1184,14 +1184,27 @@ def _continue_agent(state):
 
         state["tool_call_history"].append(call_signature)
 
-        observation = _agent_tool(
-            name,
-            arguments,
-            state["order_id"],
-            days,
-            run_id=state["run_id"],
-            scenario_id=state["scenario_id"],
-        )
+        try:
+            observation = _agent_tool(
+                name,
+                arguments,
+                state["order_id"],
+                days,
+                run_id=state["run_id"],
+                scenario_id=state["scenario_id"],
+            )
+        except Exception as exc:
+            state["last_error"] = (
+                f"Tool '{name}' failed: {exc}"
+            )
+            return _finish(
+                state,
+                "FALLBACK_TOOL_ERROR",
+                (
+                    f"Stopped safely because tool "
+                    f"'{name}' failed: {exc}"
+                ),
+            )
 
         step = {
             "step": len(state["steps"]) + 1,
