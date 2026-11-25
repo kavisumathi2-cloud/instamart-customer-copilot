@@ -86,6 +86,7 @@ python src/cleaning_audit.py
 python src/build_database.py
 python src/check_database.py
 ```
+
 ### 6. Run SQL analysis
 
 ```powershell
@@ -149,6 +150,7 @@ Run the seven-scenario evaluation:
 ```powershell
 python src/refund_agent.py --scenarios
 ```
+
 Compare the ReAct agent with the deterministic Plan-and-Execute workflow:
 
 ```powershell
@@ -169,6 +171,7 @@ The Plan-and-Execute tests cover missing order IDs, invalid request windows, mis
 ```powershell
 python -m pytest -q
 ```
+
 
 Generated results may change when scripts are rerun. The results below describe recorded runs and should be rechecked after a fresh reproduction.
 
@@ -194,6 +197,8 @@ The raw-data audit identified data-quality issues before cleaning.
 | Missing order IDs | 0 | 0.00% |
 | Pending orders | 656 | 5.01% |
 | Invalid, missing, or negative order amounts (raw rows) | 120 | 0.92% |
+| Non-numeric or blank order amounts | 120 | 0.92% |
+| Negative numeric order amounts | 0 | 0.00% |
 | Negative delivery times | 106 | 0.81% |
 | Blank delivery times | 2,541 | 19.42% |
 
