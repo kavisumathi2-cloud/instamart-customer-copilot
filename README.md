@@ -298,7 +298,7 @@ The counts below are rule-specific: `before_count` is the number of affected rec
 | Tickets | Exact duplicate row removal | 0 | 0 | 0 |
 | Tickets | Missing ticket text handling | 4 | 0 | 4 |
 
-For city and gender normalization, Before and After count distinct spellings, while Records changed or removed counts the customer rows whose values were actually changed (346 and 950).
+For city and gender normalization, Before and After count distinct spellings. The city row-change count of 346 excludes 130 whitespace-only changes (476 exact changed rows in total); the gender row-change count of 950 includes all exact changed rows.
 
 Signup dates are parsed with `pandas.to_datetime(errors="coerce")`; invalid values would become missing dates. The audit reports zero invalid dates before and after conversion. SQLite stores the resulting dates as ISO-formatted text, because SQLite does not have a dedicated native DATETIME storage type.
 
