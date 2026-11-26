@@ -612,7 +612,7 @@ The recorded evaluation passed all 14 questions: 12 answerable questions and two
 
 **Chunk overlap comparison**
 
-The comparison tested all 12 answerable evaluation questions using 40-word chunks with either 10-word overlap or zero overlap. At top-k 1, the 10-word-overlap configuration fully supported 11 of 12 questions, while zero overlap fully supported 8 of 12. Zero overlap missed expected facts for four questions: failed-payment refund time, approved-refund time, refund approval above INR 1,000, and wallet-balance cash refunds. The 10-word-overlap configuration missed the approved-refund time fact at top-k 1. At top-k 3, both configurations fully supported all 12 questions. The production retrieval setting remains top-k 3; this experiment shows an overlap benefit at top-k 1, not at top-k 3.
+The comparison tested all 12 answerable evaluation questions using 40-word chunks with either 10-word overlap or zero overlap. At top-k 1, the 10-word-overlap configuration fully supported 10 of 12 questions, while zero overlap fully supported 8 of 12. Zero overlap missed expected facts for four questions: failed-payment refund time, approved-refund time, refund approval above INR 1,000, and wallet-balance cash refunds. The 10-word-overlap configuration missed two questions at top-k 1: when a late delivery refund is allowed and how long an approved refund takes. At top-k 3, both configurations fully supported all 12 questions. The production retrieval setting remains top-k 3; this experiment shows an overlap benefit at top-k 1, not at top-k 3.
 
 ### Refund-agent policy and guardrails
 
@@ -627,7 +627,7 @@ Recorded policy thresholds:
 - Missing orders must not be refunded.
 - The agent must stop safely when its limits are reached.
 
-The agent exposes its tools through a `TOOLS_SPEC` list and a `TOOL_MAP` dictionary. `get_order` reads from `data/instamart.db` using a parameterized query. `issue_refund` and `escalate_to_human` write a ledger record containing an event ID, UTC timestamp, tool name, run ID, scenario ID, order ID, refund amount, status, and a flag confirming that no real money was transferred. Before writing, the function checks whether the same event ID already exists and returns the existing record instead of appending a duplicate. The existing ledger also contains 26 legacy records written before these fields were introduced.
+The agent exposes its available tools through a `TOOL_MAP` dictionary. `get_order` reads from `data/instamart.db` using a parameterized query. `issue_refund` and `escalate_to_human` write a ledger record containing an event ID, UTC timestamp, tool name, run ID, scenario ID, order ID, refund amount, status, and a flag confirming that no real money was transferred. Before writing, the function checks whether the same event ID already exists and returns the existing record instead of appending a duplicate. The existing ledger also contains 26 legacy records written before these fields were introduced.
 
 All refunds are simulated. No real payment or transfer occurs.
 
@@ -677,21 +677,10 @@ The refund-agent implementation writes run information and refund-action records
 - `outputs/refund_ledger.jsonl`
 - `state/`
 
-The automated test suite includes checkpoint-resume tests for completed, in-progress, and missing checkpoint states. In addition, a controlled interruption-and-resume demonstration was executed using a unique run ID (`CRASH_RESUME_CHECK_001`). The run was deliberately interrupted immediately after the second tool checkpoint had been saved.
+The automated test suite includes checkpoint-resume tests for completed, in-progress, and missing checkpoint states. Crash-recovery behavior is tested in `tests/test_crash_resume.py` using isolated temporary directories. The first test simulates an interruption after the `get_order` and `search_policy` tool checkpoints have been saved, then verifies that these completed tools are not repeated after resuming. The workflow continues with `calculate_refund` and `issue_refund` and completes with a single refund ledger entry.
 
-| Checkpoint / resume evidence | Observed result |
-|---|---|
-| Status at interruption | `in_progress` |
-| Completed tools before interruption | `get_order`, `search_policy` |
-| Saved tool-call history | 2 calls |
-| Final recorded tool sequence (including pre-interruption steps) | `get_order` -> `search_policy` -> `calculate_refund` -> `issue_refund` |
-| Re-execution of the first two tools | None |
-| Final status | `REFUND` |
-| Final simulated refund | INR 58.00 |
-| Total LLM calls | 5 |
-| Final workflow steps | 4 |
+The older `CRASH_RESUME_CHECK_001` saved checkpoint uses a legacy ledger-record format and is not treated as verification of the current implementation.
 
-The interruption-before-third-tool scenario is reproduced in `tests/test_crash_resume.py`. It verifies that the saved `get_order` and `search_policy` steps are not repeated after resume, and that the workflow completes with one refund ledger entry.
 A second test simulates a crash immediately after `issue_refund` writes the ledger but before the tool result is checkpointed. On resume, `issue_refund` executes again; the repeated event ID is detected and the existing ledger record is returned instead of appending a duplicate. The test verifies that exactly one ledger entry exists for that run and that `real_money_transferred` is false. This demonstrates sequential ledger-write deduplication across this simulated retry, not exactly-once tool execution or production-grade payment idempotency. Concurrent ledger writes and real payment-gateway side effects are not covered.
 
 #### ReAct vs deterministic Plan-and-Execute results
