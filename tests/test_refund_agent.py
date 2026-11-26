@@ -248,6 +248,47 @@ class TestRefundAgentResume(unittest.TestCase):
 
 class TestRefundLedger(unittest.TestCase):
 
+
+    def test_failed_refund_does_not_write_ledger(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            ledger_path = Path(temp_dir) / "refund_ledger.jsonl"
+
+            with patch(
+                "src.refund_agent.REFUND_LEDGER_PATH",
+                ledger_path,
+            ):
+                result = issue_refund(
+                    "ORD-110603",
+                    58,
+                    approved=False,
+                    request_days=3,
+                    run_id="test-failed-refund",
+                    scenario_id="TEST_FAILED",
+                )
+
+            self.assertIn("error", result)
+            self.assertFalse(ledger_path.exists())
+
+    def test_failed_escalation_does_not_write_ledger(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            ledger_path = Path(temp_dir) / "refund_ledger.jsonl"
+
+            with patch(
+                "src.refund_agent.REFUND_LEDGER_PATH",
+                ledger_path,
+            ):
+                result = escalate_to_human(
+                    "ORD-107652",
+                    2000.0,
+                    request_days=3,
+                    run_id="test-failed-escalation",
+                    scenario_id="TEST_FAILED",
+                )
+
+            self.assertIn("error", result)
+            self.assertFalse(ledger_path.exists())
+
+
     def test_duplicate_event_is_recorded_only_once(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             ledger_path = Path(temp_dir) / "refund_ledger.jsonl"
