@@ -437,8 +437,72 @@ class TestRefundAgentBudgetSafeguards(unittest.TestCase):
                     Path(result["checkpoint_path"]).exists()
                 )
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
+
+    def test_zero_iteration_limit_stops_before_llm_call(self):
+        state = self.make_state()
+        state["max_iterations"] = 0
+
+        with patch("src.refund_agent.mock_llm.chat") as mock_chat:
+            result = self.run_isolated(state)
+
+        self.assertEqual(result["status"], "FALLBACK_MAX_ITERATIONS")
+        self.assertEqual(result["step_count"], 0)
+        self.assertEqual(result["llm_calls"], 0)
+        mock_chat.assert_not_called()
+
+    def test_llm_call_limit_stops_before_next_call(self):
+        state = self.make_state()
+        state["llm_calls"] = 20
+
+        with patch("src.refund_agent.mock_llm.chat") as mock_chat:
+            result = self.run_isolated(state)
+
+        self.assertEqual(result["status"], "FALLBACK_MAX_ITERATIONS")
+        self.assertEqual(result["llm_calls"], 20)
+        mock_chat.assert_not_called()
+
+    def test_configured_iteration_limit_stops_after_exact_calls(self):
+        state = self.make_state()
+        state["max_iterations"] = 2
+
+        def make_response(call_id, order_id):
+            tool_call = SimpleNamespace(
+                id=call_id,
+                name="get_order",
+                arguments=json.dumps({"order_id": order_id}),
+            )
+            message = SimpleNamespace(
+                content=None,
+                tool_calls=[tool_call],
+            )
+            return SimpleNamespace(
+                usage=SimpleNamespace(total_tokens=1),
+                choices=[SimpleNamespace(message=message)],
+            )
+
+        responses = [
+            make_response("iteration-call-1", "ORD-110603"),
+            make_response("iteration-call-2", "ORD-110604"),
+        ]
+
+        with (
+            patch(
+                "src.refund_agent.mock_llm.chat",
+                side_effect=responses,
+            ) as mock_chat,
+            patch(
+                "src.refund_agent._agent_tool",
+                return_value={"success": True},
+            ) as mock_tool,
+        ):
+            result = self.run_isolated(state)
+
+        self.assertEqual(result["status"], "FALLBACK_MAX_ITERATIONS")
+        self.assertEqual(result["step_count"], 2)
+        self.assertEqual(result["llm_calls"], 2)
+        self.assertEqual(mock_chat.call_count, 2)
+        self.assertEqual(mock_tool.call_count, 2)
+
 
 
 class TestScenarioLedgerValidation(unittest.TestCase):
@@ -478,3 +542,6 @@ class TestScenarioLedgerValidation(unittest.TestCase):
         self.assertTrue(
             _scenario_ledger_matches([], None, 0.0)
         )
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
