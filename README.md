@@ -161,7 +161,7 @@ This comparison runs both workflows against the seven scenarios and writes the r
 
 ### 13. Run automated tests
 
-Run `python -m pytest -v` from the repository root. The latest verified run completed with **59 passed tests**.
+Run `python -m pytest -v` from the repository root. The latest verified run completed with **60 passed tests**.
 
 The automated suite covers refund request validation, refund safety rules, crash-and-resume behavior including retry after a refund-ledger write but before checkpoint persistence, sequential ledger duplicate prevention, verification that failed refund and escalation attempts do not write ledger entries, refund-agent token and time budget safeguards (including pre-call prompt estimation and post-call token-overflow handling), ticket PII redaction and prompt privacy, and Plan-and-Execute workflow safety.
 

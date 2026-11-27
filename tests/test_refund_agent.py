@@ -18,6 +18,8 @@ from src.refund_agent import (
     _scenario_ledger_matches,
 )
 
+from src import refund_agent as refund_agent_module
+
 
 class TestRefundRequestDays(unittest.TestCase):
 
@@ -467,16 +469,79 @@ class TestRefundAgentBudgetSafeguards(unittest.TestCase):
             ):
                 result = _continue_agent(state)
 
-                self.assertEqual(result["status"], "FALLBACK_TOOL_ERROR")
-                self.assertIn(
-                    "Simulated tool failure",
-                    result["final_answer"],
-                )
-                self.assertEqual(result["step_count"], 0)
-                self.assertFalse(result["ledger_recorded"])
-                self.assertTrue(
-                    Path(result["checkpoint_path"]).exists()
-                )
+            self.assertEqual(result["status"], "FALLBACK_TOOL_ERROR")
+            self.assertIn("Simulated tool failure", result["final_answer"])
+            self.assertEqual(result["step_count"], 0)
+            self.assertFalse(result["ledger_recorded"])
+            self.assertTrue(Path(result["checkpoint_path"]).exists())
+
+    def test_ledger_write_failure_stops_agent_safely(self):
+        state = self.make_state()
+
+        tool_call = SimpleNamespace(
+            id="tool-call-ledger-001",
+            name="issue_refund",
+            arguments=json.dumps({
+                "order_id": "ORD-110603",
+                "refund_inr": 58,
+            }),
+        )
+
+        message = SimpleNamespace(
+            content=None,
+            tool_calls=[tool_call],
+        )
+
+        response = SimpleNamespace(
+            usage=SimpleNamespace(total_tokens=10),
+            choices=[SimpleNamespace(message=message)],
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            ledger_path = root / "outputs" / "refund_ledger.jsonl"
+            real_append_jsonl = refund_agent_module.append_jsonl
+
+            def fail_ledger_write(path, record):
+                if Path(path) == ledger_path:
+                    raise OSError("Simulated ledger write failure")
+                return real_append_jsonl(path, record)
+
+            with (
+                patch("src.refund_agent.STATE_DIR", root / "state"),
+                patch("src.refund_agent.OUTPUT_DIR", root / "outputs"),
+                patch(
+                    "src.refund_agent.AGENT_RUNS_PATH",
+                    root / "agent_runs.jsonl",
+                ),
+                patch(
+                    "src.refund_agent.REFUND_LEDGER_PATH",
+                    ledger_path,
+                ),
+                patch(
+                    "src.refund_agent.append_jsonl",
+                    side_effect=fail_ledger_write,
+                ),
+                patch(
+                    "src.refund_agent.mock_llm.chat",
+                    return_value=response,
+                ),
+            ):
+                result = _continue_agent(state)
+
+            self.assertEqual(
+                result["status"],
+                "FALLBACK_TOOL_ERROR",
+                result["final_answer"],
+            )
+            self.assertIn(
+                "Simulated ledger write failure",
+                result["final_answer"],
+            )
+            self.assertEqual(result["step_count"], 0)
+            self.assertFalse(result["ledger_recorded"])
+            self.assertFalse(ledger_path.exists())
+            self.assertTrue(Path(result["checkpoint_path"]).exists())
 
 
     def test_zero_iteration_limit_stops_before_llm_call(self):
